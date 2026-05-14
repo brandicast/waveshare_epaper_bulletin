@@ -6,7 +6,7 @@ from machine import Pin
 import socket
 import os
 
-VERSION = "1.7 - 20260514_021000"
+VERSION = "1.8 - 20260514_235500"
 
 # Initialize ePaper only when needed
 epd = None
@@ -179,7 +179,9 @@ def provision_wifi(existing_epd=None):
                             print('Received config for:', ssid)
                             with open('./configs/wifi_config.json', 'w') as f:
                                 json.dump(config, f)
-                            response = 'HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<html><body><h1>Config saved! Device will now connect.</h1></body></html>'
+                            
+                            # Redirect to success page (self with param)
+                            response = 'HTTP/1.1 303 See Other\r\nLocation: /?success=1\r\n\r\n'
                             cl.send(response)
                             cl.close()
                             display_text(["Config saved!", "Connecting..."], existing_epd=existing_epd)
@@ -189,20 +191,16 @@ def provision_wifi(existing_epd=None):
                             cl.send(response)
                             cl.close()
                     else:
-                        # Serve form
-                        html = '''<!DOCTYPE html>
-<html>
-<head><title>Pico WiFi Setup</title></head>
-<body>
-<h1>Enter WiFi Credentials</h1>
-<form method="post" action="/submit">
-SSID: <input type="text" name="ssid"><br>
-Password: <input type="password" name="password"><br>
-<input type="submit" value="Submit">
-</form>
-</body>
-</html>'''
-                        response = 'HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n' + html
+                        # Serve beautified template
+                        html = ""
+                        try:
+                            with open('./resources/www/index.html', 'r') as f:
+                                html = f.read()
+                        except:
+                            # Minimal fallback if file is missing
+                            html = '<html><body><h1>BreadSoft Setup</h1><form method="post" action="/submit">SSID: <input name="ssid"><br>Pass: <input name="password"><br><input type="submit"></form></body></html>'
+                        
+                        response = 'HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: ' + str(len(html)) + '\r\n\r\n' + html
                         cl.send(response)
                         cl.close()
                 except OSError as e:
