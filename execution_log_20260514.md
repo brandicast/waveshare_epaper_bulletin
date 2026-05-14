@@ -31,10 +31,12 @@
 - **UI 提升**：設計並生成了 `wifi_connected.bmp` 與 `home.bmp`，加入 **BreadSoft** 品牌標識。
 - **文件化**：編寫了完整的 `README.md` 並更新了技術規格手冊。
 
-### 6. 專案獨立化與倉庫遷移
-- **執行動作**：將 `epaper_bulletin` 目錄從原始倉庫分離，初始化為獨立的 Git 倉庫。
-- **目標倉庫**：`https://github.com/brandicast/waveshare_epaper_bulletin.git`
-- **結果**：成功完成 Initial Commit 並推送到新倉庫，專案現在擁有獨立的版本控制歷史。
+### 7. WiFi 配網 UI 重構 (Template-based)
+- **結構優化**：將原本硬編碼在 Python 中的 HTML 提取至外部模板 `./resources/www/index.html`。
+- **美化設計**：引入 **Glassmorphism (玻璃擬態)** 設計風格，配合 BreadSoft 品牌色調。
+- **RWD 支援**：全面支援響應式設計，確保在手機與電腦上皆有良好的操作體驗。
+- **效能平衡**：採用單一檔案 (Single-file) 模板技術，將 CSS 與 JS 內嵌，減少 Pico W 網頁伺服器的請求負擔。
+- **流程優化**：新增 POST 提交後的 303 Redirect 與成功狀態顯示，提升用戶回饋。
 
 ## 後續建議
 - **Raw Binary 優先**：若追求極致更新速度，建議傳送端優先使用 `binary` 主題傳送 48,000 bytes 的原始像素資料。
