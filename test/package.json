@@ -1,0 +1,31 @@
+{
+    "name": "epaper-bulletin-test",
+    "version": "1.0.0",
+    "description": "MQTT Publisher for E-Paper Bulletin Board - Raw Pixel Data",
+    "main": "mqtt_publisher.js",
+    "type": "module",
+    "scripts": {
+        "start": "node mqtt_publisher.js",
+        "test:checkerboard": "node mqtt_publisher.js --pattern checkerboard",
+        "test:gradient": "node mqtt_publisher.js --pattern gradient",
+        "test:border": "node mqtt_publisher.js --pattern border",
+        "test:text": "node mqtt_publisher.js --pattern text 'Hello E-Paper'",
+        "test:image": "node mqtt_publisher.js test_image.png"
+    },
+    "keywords": [
+        "mqtt",
+        "epaper",
+        "pico",
+        "raspberry-pi",
+        "pixel-data"
+    ],
+    "author": "",
+    "license": "MIT",
+    "dependencies": {
+        "mqtt": "^5.0.0",
+        "jimp": "^0.22.8"
+    },
+    "engines": {
+        "node": ">=14.0.0"
+    }
+}
