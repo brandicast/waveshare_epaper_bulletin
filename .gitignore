@@ -1,4 +1,4 @@
 resources/received.bmp
 resources/latest.bin
 temp_mqtt_msg.bin
-configs/
+wifi_config/

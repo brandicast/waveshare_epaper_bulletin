@@ -72,17 +72,17 @@ class BMPDisplay:
             success = False
             
             if is_bmp:
-                print("[Display] Detected BMP format, centering at {},{}".format(x_offset, y_offset))
-                # Try color display first (supports Black/White/Red)
-                print("[Display] Attempting 24-bit color BMP rendering...")
+                print("[Display] Rendering BMP...")
+                # Try 3-color rendering (Black/White/Red)
                 success = self.epd.display_bmp_color(filepath, x=x_offset, y=y_offset)
+                
+                # If 3-color fails or it's a simple 1-bit BMP, fallback to fast 1-bit rendering
                 if not success:
-                    print("[Display] display_bmp_color failed, trying 1-bit display_bmp...")
                     success = self.epd.display_bmp(filepath, x=x_offset, y=y_offset)
                 
                 if success:
-                    print("[Display] BMP rendering finished, refreshing screen...")
                     self.epd.display()
+                    print("[Display] Done.")
             else:
                 # Fallback to raw pixel data (assumed 800x480)
                 print("[Display] Treating as raw pixel data...")

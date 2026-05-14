@@ -54,7 +54,7 @@ def initialize_wifi(timeout_ms=DEFAULT_TIMEOUT_MS):
     """Initialize WiFi manager."""
     print("\n=== Initializing WiFi ===")
     try:
-        from wifi_manager import WiFiManager
+        from core.wifi_manager import WiFiManager
         
         wm = WiFiManager(timeout_ms=timeout_ms)
         print("[WiFi] WiFi manager created")
@@ -156,8 +156,11 @@ def initialize_mqtt(timeout_ms=DEFAULT_TIMEOUT_MS):
     """Initialize MQTT handler."""
     print("\n=== Initializing MQTT ===")
     
+    import gc
+    gc.collect()
+    
     try:
-        from mqtt_handler import MQTTHandler
+        from core.mqtt_handler import MQTTHandler
         
         mqtt = MQTTHandler(timeout_ms=timeout_ms)
         
@@ -254,12 +257,17 @@ def main_loop(epd, display_handler, mqtt_handler, timeout_ms=DEFAULT_TIMEOUT_MS)
                         elapsed = utime.ticks_diff(utime.ticks_ms(), start)
                         loop_count += 1
                         
-                        # Print status every 30 checks (~30 seconds)
-                        if loop_count % 30 == 0:
+                        # Print status every 60 checks (~60 seconds)
+                        if loop_count % 60 == 0:
                             print(f"[Main] Status: Loop #{loop_count}, Errors: {error_count}, ({elapsed}ms/check)")
+                            
+                            # Prevent overflow (reset every 1 million loops)
+                            if loop_count > 1000000:
+                                loop_count = 0
+                                
                     elif not mqtt_handler.is_connected:
                         # If not connected, just count it as a "waiting" state or minor error
-                        if loop_count % 30 == 0:
+                        if loop_count % 60 == 0:
                             print(f"[Main] Status: MQTT disconnected, Loop #{loop_count}")
                         error_count += 1
                     else:
@@ -316,13 +324,28 @@ def main():
     print("="*60)
     
     try:
-        # Phase 1: Initialize display
-        epd = initialize_display()
-        if not epd:
-            print("[Main] FATAL: Display initialization failed")
-            return 1
+        # Phase 0: System Welcome & Initial Display Setup
+        print("\n" + "="*40)
+        print("BreadSoft E-Paper Bulletin System Starting")
+        print("="*40)
         
-        # Phase 2: Initialize WiFi
+        # Initialize display hardware immediately
+        from lib.epaper_7_5_b import EPD_7in5_B
+        epd = EPD_7in5_B()
+        epd.init() # Ensure it's ready
+        
+        from core.bmp_display import BMPDisplay
+        display_handler = BMPDisplay(epd, timeout_ms=DEFAULT_TIMEOUT_MS)
+        
+        # Show Welcome Screen before anything else
+        if file_exists('./resources/welcome.bmp'):
+            print("[Main] Displaying welcome screen...")
+            display_handler.display_file('./resources/welcome.bmp')
+        else:
+            print("[Main] Welcome screen not found, drawing text...")
+            display_handler.draw_text("BreadSoft Bulletin\nStarting system...", 100, 200)
+
+        # Phase 1: Initialize WiFi
         wifi_manager = initialize_wifi(timeout_ms=DEFAULT_TIMEOUT_MS)
         if not wifi_manager:
             print("[Main] FATAL: WiFi initialization failed")
@@ -337,7 +360,7 @@ def main():
         
         # Phase 4: Initialize display handler
         try:
-            from bmp_display import BMPDisplay
+            from core.bmp_display import BMPDisplay
             display_handler = BMPDisplay(epd, timeout_ms=DEFAULT_TIMEOUT_MS)
         except ImportError as e:
             print(f"[Main] FATAL: Cannot import display handler: {e}")

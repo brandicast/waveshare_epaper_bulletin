@@ -4,14 +4,13 @@
 
 ## 🚀 核心特性
 
-- **記憶體優化串流**：採用分段 (Chunk-by-chunk) 檔案串流技術接收 MQTT 訊息，即使在只有 264KB RAM 的 Pico W 上也能穩定處理 800x480 的高品質圖片。
-- **雙主題支援**：
-    - `{topic}/bmp`：支援標準 BMP 格式圖片（自動偵測與置中顯示）。
-    - `{topic}/binary`：支援原始 1-bit 像素資料（極速顯示）。
-- **快速渲染引擎**：優化後的 BMP 渲染邏輯，能自動跳過白色像素，大幅縮短顯示等待時間。
-- **動態配網 (WiFi Provisioning)**：內建 Web 門戶，方便在不同環境下配置 WiFi 連線。
-- **電源管理**：支援 Deep Sleep 深度睡眠模式，配合硬體重置喚醒，適合電池供電場景。
-- **品牌化設計**：內建 BreadSoft 專屬歡迎畫面與待機畫面。
+- **記憶體優化串流**：採用分段 (Chunk-by-chunk) 檔案串流技術接收 MQTT 訊息，並在 24-bit BMP 渲染中加入逐行記憶體回收。
+- **三色顯示支援**：支援黑、白、紅三色顯示。
+    - **1-bit BMP**：極速顯示（黑白）。
+    - **24-bit BMP**：高品質顯示（黑白紅）。
+    - **8-bit 索引色 (計畫中)**：平衡速度與顏色的最佳選擇。
+- **動態配網 (WiFi Provisioning)**：具備美觀且響應式 (RWD) 的 Web 設定介面，支援密碼顯示/隱藏切換。
+- **自動化維護**：主迴圈具備計數器溢位保護與自動錯誤重連機制。
 
 ## 🛠️ 硬體需求
 
@@ -19,29 +18,46 @@
 - **顯示器**：Waveshare 7.5inch e-Paper (B) V3 (三色：黑/白/紅)
 - **解析度**：800 × 480 像素
 
-## 📂 目錄結構
+## 📂 Pico 上傳清單 (Pico Directory Structure)
 
-```text
-.
-├── epaper_bulletin.py    # 主程式入口
-├── bmp_display.py        # 顯示邏輯與圖片處理
-├── mqtt_handler.py       # MQTT 連線與訊息處理
-├── wifi_manager.py       # WiFi 連線管理
-├── lib/
-│   ├── epaper_7_5_b.py   # Waveshare 螢幕驅動程式 (已優化)
-│   └── wifi_provision.py # 網頁配網邏輯
-├── conf/
-│   └── mqtt.conf         # MQTT 伺服器配置
-├── resources/
-│   ├── wifi_connected.bmp# 啟動歡迎圖
-│   └── home.bmp          # 系統待機圖
-└── umqtt/                # MQTT 核心庫 (已修改支援串流)
+要讓系統正常運作，您必須將以下目錄與檔案上傳至 Pico：
+
+- `epaper_bulletin.py` (主程式入口)
+- `core/` (包含 `bmp_display.py`, `mqtt_handler.py`, `wifi_manager.py`)
+- `lib/` (包含 `epaper_7_5_b.py`, `wifi_provision.py`)
+- `conf/` (包含 `mqtt.conf`)
+- `resources/` (包含 `welcome.bmp`, `home.bmp`, `starting.bmp`, `provisioning.bmp`, `wifi_connected.bmp`)
+- `resources/www/` (包含 `index.html` - 配網介面)
+
+*注意：`wifi_config/` 目錄會由系統自動建立，請勿手動上傳包含敏感資訊的設定檔。*
+
+## 🛠️ 電腦端工具使用 (Tools)
+
+建議在電腦上安裝以下套件：
+```bash
+pip install Pillow paho-mqtt
+```
+*若無 Pillow，部分工具改由系統 ffmpeg 代勞。*
+
+### 1. 產生自定義 BMP (`tools/bmp_gen.py`)
+自動產生適合 800x480 的 3 色 BMP 檔案：
+```bash
+# 產生黑白文字
+python3 tools/bmp_gen.py "歡迎來到 BreadSoft" [輸出路徑]
+
+# 產生包含紅色警告的文字
+python3 tools/bmp_gen.py "系統狀態正常" --red "但請注意電源" [輸出路徑]
+```
+
+### 2. 傳送圖片到電子紙 (`tools/mqtt_pub.py`)
+將圖片透過 MQTT 傳送到 Pico W，內建 10 秒發送逾時保護：
+```bash
+python3 tools/mqtt_pub.py tools/test_3color.bmp
 ```
 
 ## ⚙️ 配置說明
 
 ### MQTT 配置 (`conf/mqtt.conf`)
-編輯該檔案以符合您的伺服器環境：
 ```ini
 mqtt_server=192.168.0.96
 mqtt_port=1883
@@ -49,24 +65,12 @@ mqtt_topic=epaper/bulletin
 ```
 
 ### WiFi 配置
-首次啟動時，若找不到存儲的 WiFi 資訊，Pico W 會進入 AP 模式（名稱通常為 `Pico-Setup`）。連線後打開瀏覽器訪問 `192.168.4.1` 即可進行配網。
-
-## 📤 如何傳送圖片
-
-您可以透過任何 MQTT 客戶端傳送圖片：
-
-1. **傳送標準 BMP**：
-   - Topic: `epaper/bulletin/bmp`
-   - Payload: BMP 檔案的二進位內容。
-
-2. **傳送原始像素資料**：
-   - Topic: `epaper/bulletin/binary`
-   - Payload: 48,000 bytes 的原始像素資料 (1-bit)。
+首次啟動或長按 GPIO 14 (5秒) 會進入 AP 模式（SSID: `Pico-Setup`）。連線後訪問 `192.168.4.1` 即可進行配網。
 
 ## 📝 注意事項
 
-- **螢幕雜點**：系統從 Deep Sleep 喚醒時會自動執行硬體重置，確保畫面不會出現隨機雜訊。
-- **渲染時間**：優化後的 1-bit BMP 顯示時間約為 15-20 秒，彩色 24-bit BMP 則較慢。
+- **記憶體限制**：由於 7.5 吋螢幕緩衝區較大，請避免同時開啟過多網路服務。
+- **三色渲染**：處理 24-bit BMP 時，系統會自動辨識紅色區域並進行映射。
 
 ---
 **Designed by BreadSoft**

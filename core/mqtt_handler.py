@@ -6,6 +6,7 @@ Handles MQTT connection and message receiving for raw pixel data
 import json
 import os
 import utime
+import gc
 
 MAX_BINARY_SIZE = 48000  # Exactly 48000 bytes for 800x480 monochrome display (48000 / 8)
 MQTT_CONFIG_PATH = './conf/mqtt.conf'
@@ -73,6 +74,10 @@ class MQTTHandler:
             print("[MQTT] No configuration loaded")
             return False
         
+        # Clean up memory before connecting
+        self.client = None
+        gc.collect()
+        
         try:
             from umqtt.robust import MQTTClient
             
@@ -110,6 +115,14 @@ class MQTTHandler:
         
         except ImportError:
             print("[MQTT] umqtt.robust library not available")
+            return False
+        except OSError as e:
+            if e.args[0] == 12: # ENOMEM
+                print("[MQTT] FATAL: Out of memory during connection. Cleaning up...")
+                self.client = None
+                gc.collect()
+            else:
+                print("[MQTT] Connection error: {}".format(e))
             return False
         except Exception as e:
             print("[MQTT] Fatal error: {}".format(e))

@@ -336,29 +336,24 @@ class EPD_7in5_B:
                 x += 1
     
     # ==================== BMP 影像顯示 ====================
-    def display_bmp(self, filename, x=0, y=0):
+    def display_bmp(self, filename, x=0, y=0, red_threshold=128):
         """
-        顯示 1-bit 單色 BMP 檔案 (黑白)
+        顯示 BMP 檔案 (自動辨識 1-bit 或 24-bit 三色)
         
         參數:
-            filename: BMP 檔案名稱
-            x, y: 顯示位置 (左上角)
-        
-        限制:
-            - 僅支援 1-bit 單色 BMP
-            - 建議尺寸不超過 800x480
+            filename: BMP 檔案路徑
+            x, y: 顯示起始位置
+            red_threshold: 紅色判斷閾值 (僅 24-bit 適用)
         """
+        import gc
+        gc.collect()
         try:
             with open(filename, 'rb') as f:
-                # 讀取 BMP 檔頭 (前 54 bytes)
                 header = f.read(54)
-                
-                # 檢查 BMP 簽章 "BM"
                 if header[0] != 0x42 or header[1] != 0x4D:
-                    print("錯誤：不是有效的 BMP 檔案")
+                    print("錯誤：無效的 BMP 格式")
                     return False
                 
-                # 解析影像資訊
                 data_offset = int.from_bytes(header[10:14], 'little')
                 width = int.from_bytes(header[18:22], 'little')
                 height = int.from_bytes(header[22:26], 'little')
@@ -366,125 +361,64 @@ class EPD_7in5_B:
                 
                 print(f"BMP 資訊: {width}x{height}, {bit_count} bits/pixel")
                 
-                # 檢查是否為單色 BMP
-                if bit_count != 1:
-                    print("警告：建議使用 1-bit 單色 BMP (0=黑, 1=白)")
-                    print("彩色 BMP 請使用 display_bmp_color()")
+                # 先清空畫布 (Black -> White, Red -> 0)
+                self.imageblack.fill(1)
+                self.imagered.fill(0)
                 
-                # 計算每行 bytes 和對齊
-                row_bytes = (width + 7) // 8
-                padding = (4 - (row_bytes % 4)) % 4
-                
-                # 移動到影像資料
                 f.seek(data_offset)
                 
-                # Optimization: Only process non-white pixels since we already cleared to white
-                black = self.BLACK
-                for row in range(height):
-                    if row % 100 == 0:
-                        print(f"  [EPD] Processing row {row}/{height}...")
-                    
-                    screen_y = y + (height - 1 - row)
-                    if screen_y < 0 or screen_y >= self.height:
-                        f.read(row_bytes + padding)
-                        continue
-                    
-                    row_data = f.read(row_bytes + padding)
-                    
-                    for col in range(width):
-                        byte_idx = col >> 3 # Equivalent to col // 8
-                        bit_pos = 7 - (col & 7) # Equivalent to 7 - (col % 8)
-                        
-                        # Only call set_pixel if it's a black pixel (0 in 1-bit BMP)
-                        if not (row_data[byte_idx] & (1 << bit_pos)):
-                            screen_x = x + col
-                            if 0 <= screen_x < self.width:
-                                self.set_pixel(screen_x, screen_y, black)
-            
-            print("  [EPD] BMP processing complete")
-            return True
-            
+                if bit_count == 1:
+                    # 高速 1-bit 渲染
+                    row_bytes = (width + 7) // 8
+                    padding = (4 - (row_bytes % 4)) % 4
+                    for row in range(height):
+                        screen_y = y + (height - 1 - row)
+                        row_data = f.read(row_bytes + padding)
+                        if 0 <= screen_y < self.height:
+                            for col in range(width):
+                                if not (row_data[col >> 3] & (0x80 >> (col & 7))):
+                                    screen_x = x + col
+                                    if 0 <= screen_x < self.width:
+                                        self.imageblack.pixel(screen_x, screen_y, 0)
+                
+                elif bit_count == 24:
+                    # 24-bit 三色渲染 (黑/白/紅)
+                    row_bytes = width * 3
+                    padding = (4 - (row_bytes % 4)) % 4
+                    for row in range(height):
+                        if row % 100 == 0: gc.collect() # 逐行回收
+                        screen_y = y + (height - 1 - row)
+                        row_data = f.read(row_bytes + padding)
+                        if 0 <= screen_y < self.height:
+                            for col in range(width):
+                                screen_x = x + col
+                                if 0 <= screen_x < self.width:
+                                    # 讀取 BGR (24-bit BMP 格式)
+                                    idx = col * 3
+                                    b = row_data[idx]
+                                    g = row_data[idx+1]
+                                    r = row_data[idx+2]
+                                    
+                                    # 紅色判斷: R 高於閾值且顯著大於 G 和 B
+                                    if r > red_threshold and r > g + 30 and r > b + 30:
+                                        self.imagered.pixel(screen_x, screen_y, 1)
+                                    # 黑色判斷: 亮度低於 128
+                                    elif (r + g + b) // 3 < 128:
+                                        self.imageblack.pixel(screen_x, screen_y, 0)
+                else:
+                    print(f"不支援的位元深度: {bit_count}")
+                    return False
+                
+                return True
         except Exception as e:
-            print(f"BMP 讀取錯誤: {e}")
+            print(f"BMP 處理出錯: {e}")
             return False
-    
+        finally:
+            gc.collect()
+
     def display_bmp_color(self, filename, x=0, y=0, red_threshold=128):
-        """
-        顯示 24-bit 彩色 BMP 檔案 (自動轉換為黑/白/紅)
-        
-        參數:
-            filename: BMP 檔案名稱
-            x, y: 顯示位置
-            red_threshold: 紅色判斷閾值 (0-255, 越高越嚴格)
-        
-        轉換規則:
-            - 若 R > G 且 R > B 且 R > red_threshold → 紅色
-            - 否則根據亮度決定黑色或白色
-        """
-        try:
-            with open(filename, 'rb') as f:
-                header = f.read(54)
-                
-                if header[0] != 0x42 or header[1] != 0x4D:
-                    print("錯誤：不是有效的 BMP 檔案")
-                    return False
-                
-                data_offset = int.from_bytes(header[10:14], 'little')
-                width = int.from_bytes(header[18:22], 'little')
-                height = int.from_bytes(header[22:26], 'little')
-                bit_count = int.from_bytes(header[28:30], 'little')
-                
-                print(f"BMP 資訊: {width}x{height}, {bit_count} bits/pixel")
-                
-                # 僅支援 24-bit RGB BMP
-                if bit_count != 24:
-                    print(f"警告：建議使用 24-bit BMP，目前為 {bit_count}-bit")
-                    if bit_count == 1:
-                        return self.display_bmp(filename, x, y)
-                
-                # 每行 bytes (24-bit = 3 bytes/pixel)
-                row_bytes = width * 3
-                padding = (4 - (row_bytes % 4)) % 4
-                
-                f.seek(data_offset)
-                
-                for row in range(height):
-                    if row % 50 == 0:
-                        print(f"  [EPD] Processing row {row}/{height}...")
-                        
-                    screen_y = y + (height - 1 - row)
-                    if screen_y < 0 or screen_y >= self.height:
-                        f.read(row_bytes + padding)
-                        continue
-                    
-                    row_data = f.read(row_bytes + padding)
-                    
-                    for col in range(width):
-                        screen_x = x + col
-                        if screen_x < 0 or screen_x >= self.width:
-                            continue
-                        
-                        # BGR 順序 (Windows BMP)
-                        b = row_data[col * 3]
-                        g = row_data[col * 3 + 1]
-                        r = row_data[col * 3 + 2]
-                        
-                        # 紅色判斷
-                        if r > g and r > b and r > red_threshold:
-                            color = self.RED
-                        else:
-                            # 亮度轉換 (Y = 0.299R + 0.587G + 0.114B)
-                            brightness = (r * 299 + g * 587 + b * 114) // 1000
-                            color = self.BLACK if brightness < 128 else self.WHITE
-                        
-                        self.set_pixel(screen_x, screen_y, color)
-            
-            print("  [EPD] BMP Color processing complete")
-            return True
-            
-        except Exception as e:
-            print(f"BMP 讀取錯誤: {e}")
-            return False
+        """相容性方法，現在轉向統一的 display_bmp"""
+        return self.display_bmp(filename, x, y, red_threshold)
     
     def display_preconverted(self, bw_data, red_data=None):
         """

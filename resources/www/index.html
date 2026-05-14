@@ -23,17 +23,18 @@
 
         body {
             background: linear-gradient(135deg, #1a1a1a 0%, #3d3d3d 100%);
-            height: 100vh;
+            min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             color: var(--light);
-            overflow: hidden;
+            padding: 20px;
         }
 
         .container {
             background: var(--glass);
             backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.2);
             padding: 2.5rem;
             border-radius: 20px;
@@ -86,6 +87,7 @@
         .input-group {
             text-align: left;
             margin-bottom: 1.5rem;
+            position: relative;
         }
 
         label {
@@ -100,8 +102,8 @@
         input {
             width: 100%;
             padding: 0.8rem 1rem;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
             border-radius: 8px;
             color: white;
             font-size: 1rem;
@@ -111,8 +113,17 @@
         input:focus {
             outline: none;
             border-color: var(--secondary);
-            background: rgba(255, 255, 255, 0.1);
-            box-shadow: 0 0 10px rgba(78, 205, 196, 0.2);
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .toggle-pass {
+            position: absolute;
+            right: 12px;
+            bottom: 12px;
+            color: #888;
+            cursor: pointer;
+            font-size: 0.8rem;
+            user-select: none;
         }
 
         .btn {
@@ -134,10 +145,6 @@
             box-shadow: 0 5px 15px rgba(255, 107, 107, 0.4);
         }
 
-        .btn:active {
-            transform: translateY(0);
-        }
-
         .footer {
             margin-top: 2rem;
             font-size: 0.7rem;
@@ -145,10 +152,7 @@
         }
 
         /* Success State */
-        .success-content {
-            display: none;
-        }
-
+        .success-content { display: none; }
         .success .form-content { display: none; }
         .success .success-content { display: block; }
         
@@ -169,7 +173,7 @@
             <h1>BreadSoft Bulletin</h1>
             <p>Setup WiFi to start displaying images</p>
             
-            <form method="post" action="/submit">
+            <form method="post" action="/submit" id="setupForm">
                 <div class="input-group">
                     <label>Network SSID</label>
                     <input type="text" name="ssid" placeholder="Enter WiFi Name" required>
@@ -177,7 +181,8 @@
                 
                 <div class="input-group">
                     <label>Password</label>
-                    <input type="password" name="password" placeholder="Enter Password">
+                    <input type="password" name="password" id="passwordField" placeholder="Enter Password">
+                    <span class="toggle-pass" onclick="togglePass()">SHOW</span>
                 </div>
                 
                 <button type="submit" class="btn">Connect Device</button>
@@ -186,18 +191,37 @@
 
         <div class="success-content">
             <div class="success-icon">✓</div>
-            <h1>Configuration Saved</h1>
-            <p>The device is now attempting to connect. You can close this window.</p>
+            <h1>Config Received</h1>
+            <p>Configuration is received, device now will try to connect to WiFi.</p>
             <div class="footer">Waiting for device handshake...</div>
         </div>
 
         <div class="footer">
-            BreadSoft E-Paper System v1.7
+            BreadSoft E-Paper System v1.9
         </div>
     </div>
 
     <script>
-        // Check for success param in URL
+        function togglePass() {
+            const field = document.getElementById('passwordField');
+            const toggle = document.querySelector('.toggle-pass');
+            if (field.type === 'password') {
+                field.type = 'text';
+                toggle.innerText = 'HIDE';
+            } else {
+                field.type = 'password';
+                toggle.innerText = 'SHOW';
+            }
+        }
+
+        // Handle form submission
+        document.getElementById('setupForm').onsubmit = function() {
+            // No longer forcing success state here, let the server's response handle it
+            document.querySelector('.btn').innerText = 'CONNECTING...';
+            document.querySelector('.btn').disabled = true;
+        };
+
+        // Check for success param in URL (standard way)
         if (window.location.search.includes('success=1')) {
             document.getElementById('mainContainer').classList.add('success');
         }
