@@ -47,8 +47,10 @@
 │   ├── test_3color.bmp     # 三色測試範例圖
 │   └── jf-openhuninn-2.1.ttf # 內建粉圓體字型
 ├── docs/                   # 專案文件與日誌
-│   ├── execution_log_20260514.md
-│   └── lesson_learned_20260514.md
+│   ├── execution_log_20260514.md  # 開發執行日誌
+│   ├── lesson_learned_20260514.md # 經驗總結與檢討
+│   └── reference/          # 技術參考文件 (規格書與原始碼)
+├── todo.md                 # 待辦事項與未來功能
 └── README.md
 ```
 
