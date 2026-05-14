@@ -31,6 +31,11 @@
 - **UI 提升**：設計並生成了 `wifi_connected.bmp` 與 `home.bmp`，加入 **BreadSoft** 品牌標識。
 - **文件化**：編寫了完整的 `README.md` 並更新了技術規格手冊。
 
+### 6. 專案獨立化與倉庫遷移
+- **執行動作**：將 `epaper_bulletin` 目錄從原始倉庫分離，初始化為獨立的 Git 倉庫。
+- **目標倉庫**：`https://github.com/brandicast/waveshare_epaper_bulletin.git`
+- **結果**：成功完成 Initial Commit 並推送到新倉庫，專案現在擁有獨立的版本控制歷史。
+
 ## 後續建議
 - **Raw Binary 優先**：若追求極致更新速度，建議傳送端優先使用 `binary` 主題傳送 48,000 bytes 的原始像素資料。
 - **圖片預縮放**：雖然支援自動置中，但在傳送前先將圖片調整為 800x480 能獲得最佳視覺效果。
