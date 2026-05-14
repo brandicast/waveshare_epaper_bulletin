@@ -18,18 +18,41 @@
 - **顯示器**：Waveshare 7.5inch e-Paper (B) V3 (三色：黑/白/紅)
 - **解析度**：800 × 480 像素
 
-## 📂 Pico 上傳清單 (Pico Directory Structure)
+## 📂 專案目錄結構 (Project Tree)
 
-要讓系統正常運作，您必須將以下目錄與檔案上傳至 Pico：
+```text
+.
+├── epaper_bulletin.py      # 主程式入口 (Pico)
+├── conf/                   # 配置文件 (Pico)
+│   └── mqtt.conf           # MQTT 伺服器設定
+├── core/                   # 專案核心邏輯 (Pico)
+│   ├── bmp_display.py      # 顯示處理器
+│   ├── mqtt_handler.py     # MQTT 訊息處理
+│   └── wifi_manager.py     # WiFi 連線管理
+├── lib/                    # 硬體驅動與第三方套件 (Pico)
+│   ├── epaper_7_5_b.py     # 7.5吋電子紙驅動 (黑/白/紅)
+│   ├── wifi_provision.py   # 配網功能邏輯
+│   └── umqtt/              # MicroPython MQTT 套件
+├── resources/              # 靜態資源檔案 (Pico)
+│   ├── welcome.bmp         # 歡迎畫面
+│   ├── home.bmp            # 待機畫面
+│   ├── starting.bmp        # WiFi 啟動畫面
+│   ├── provisioning.bmp    # 配網引導畫面
+│   ├── wifi_connected.bmp  # 連線成功畫面
+│   └── www/                # 配網網頁模板
+│       └── index.html      # RWD 配網網頁
+├── tools/                  # 電腦端輔助工具 (Host)
+│   ├── bmp_gen.py          # 3色圖片產生器 (支援中文)
+│   ├── mqtt_pub.py         # MQTT 圖片發送工具
+│   ├── test_3color.bmp     # 三色測試範例圖
+│   └── jf-openhuninn-2.1.ttf # 內建粉圓體字型
+├── docs/                   # 專案文件與日誌
+│   ├── execution_log_20260514.md
+│   └── lesson_learned_20260514.md
+└── README.md
+```
 
-- `epaper_bulletin.py` (主程式入口)
-- `core/` (包含 `bmp_display.py`, `mqtt_handler.py`, `wifi_manager.py`)
-- `lib/` (包含 `epaper_7_5_b.py`, `wifi_provision.py`)
-- `conf/` (包含 `mqtt.conf`)
-- `resources/` (包含 `welcome.bmp`, `home.bmp`, `starting.bmp`, `provisioning.bmp`, `wifi_connected.bmp`)
-- `resources/www/` (包含 `index.html` - 配網介面)
-
-*注意：`wifi_config/` 目錄會由系統自動建立，請勿手動上傳包含敏感資訊的設定檔。*
+## 📤 Pico 上傳清單 (Pico Deployment)
 
 ## 🛠️ 電腦端工具使用 (Tools)
 
