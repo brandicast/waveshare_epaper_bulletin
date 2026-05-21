@@ -3,13 +3,11 @@ MQTT Handler Module
 Handles MQTT connection and message receiving for raw pixel data
 """
 
-import json
 import os
 import sys
 import utime
 import gc
 
-MAX_BINARY_SIZE = 48000  # Exactly 48000 bytes for 800x480 monochrome display (48000 / 8)
 MQTT_CONFIG_PATH = './conf/mqtt.conf'
 USER_CONFIG_DIR = './user_config'
 RECEIVED_BMP_PATH = USER_CONFIG_DIR + '/received.bmp'
