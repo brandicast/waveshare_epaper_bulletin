@@ -207,7 +207,7 @@ class MQTTClient:
         if sz < 0:
             print("[umqtt] ERROR: Invalid message size: {}".format(sz))
             raise OSError(-1) # Connection corrupted
-        if sz > 65535: # Arbitrary limit for Pico safety, adjust if needed
+        if sz > 102400: # Allow up to 100KB for 3-color raw binary files (96,000 bytes)
             print("[umqtt] ERROR: Message too large: {}".format(sz))
             raise OSError(-1)
             

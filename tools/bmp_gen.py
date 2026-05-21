@@ -63,9 +63,40 @@ def generate_bmp(text, output_path="resources/welcome.bmp", width=800, height=48
     except:
         pass
 
-    # Save as 24-bit BMP
-    img.save(output_path, format="BMP")
-    print(f"Generated 3-color BMP: {output_path}")
+    # Save image based on file extension
+    if output_path.endswith('.bin'):
+        # Export as 96KB Raw Binary (48,000 bytes Black/White buffer + 48,000 bytes Red buffer)
+        img_rgb = img.convert('RGB')
+        pixels = img_rgb.load()
+        
+        bw_data = bytearray(width * height // 8)
+        red_data = bytearray(width * height // 8)
+        
+        for y in range(height):
+            for x in range(width):
+                r, g, b = pixels[x, y]
+                pixel_idx = y * width + x
+                byte_idx = pixel_idx // 8
+                bit_pos = 7 - (pixel_idx % 8)
+                
+                # Active-low black buffer: 0 for Black, 1 for White/Red
+                is_black = (r < 128 and g < 128 and b < 128)
+                is_red = (r > g + 40 and r > b + 40 and r > 100)
+                
+                if not is_black:
+                    bw_data[byte_idx] |= (1 << bit_pos)
+                if is_red:
+                    red_data[byte_idx] |= (1 << bit_pos)
+                    
+        with open(output_path, 'wb') as f:
+            f.write(bw_data)
+            f.write(red_data)
+        print(f"Generated Raw 2-bit Binary (.bin): {output_path} ({len(bw_data) + len(red_data)} bytes / 93.75 KB)")
+    else:
+        # Convert to 16-color palette (Pillow automatically saves it as a highly compressed 4-bit BMP)
+        quantized = img.quantize(colors=16, method=Image.Quantize.MAXCOVERAGE)
+        quantized.save(output_path, format="BMP")
+        print(f"Generated 4-bit 3-color BMP: {output_path} (192.1 KB)")
 
 if __name__ == "__main__":
     import argparse

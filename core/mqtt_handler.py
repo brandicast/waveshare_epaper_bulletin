@@ -5,12 +5,28 @@ Handles MQTT connection and message receiving for raw pixel data
 
 import json
 import os
+import sys
 import utime
 import gc
 
 MAX_BINARY_SIZE = 48000  # Exactly 48000 bytes for 800x480 monochrome display (48000 / 8)
 MQTT_CONFIG_PATH = './conf/mqtt.conf'
 LATEST_PIXEL_PATH = './resources/latest.bin'
+
+
+def _ensure_umqtt_package():
+    """Ensure the local lib/umqtt package is loaded first."""
+    try:
+        # Prefer an absolute lib path if cwd is available.
+        base_path = os.getcwd() if hasattr(os, 'getcwd') else None
+        lib_dir = base_path + '/lib' if base_path else './lib'
+    except Exception:
+        lib_dir = './lib'
+
+    if lib_dir not in sys.path:
+        sys.path.insert(0, lib_dir)
+    return lib_dir
+
 
 class MQTTHandler:
     def __init__(self, client_id="pico_epaper", timeout_ms=5000):
@@ -79,8 +95,13 @@ class MQTTHandler:
         gc.collect()
         
         try:
-            from umqtt.robust import MQTTClient
+            _ensure_umqtt_package()
             
+            try:
+                from umqtt.robust import MQTTClient
+            except ImportError:
+                from umqtt.simple import MQTTClient
+
             server = self.config['mqtt_server']
             port = int(self.config['mqtt_port'])
             topic_prefix = self.config['mqtt_topic']

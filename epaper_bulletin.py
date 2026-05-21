@@ -188,6 +188,11 @@ def initialize_mqtt(timeout_ms=DEFAULT_TIMEOUT_MS):
         return None
     except Exception as e:
         print(f"[MQTT] ERROR: Failed to initialize MQTT: {e}")
+        try:
+            import sys
+            sys.print_exception(e)
+        except Exception:
+            pass
         return None
 
 

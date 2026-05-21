@@ -20,11 +20,23 @@ class MQTTClient(simple.MQTTClient):
         i = 0
         while 1:
             try:
-                return super().connect(False)
+                res = super().connect(False)
+                if hasattr(self, 'subscriptions'):
+                    for topic, qos in self.subscriptions:
+                        super().subscribe(topic, qos)
+                return res
             except OSError as e:
                 self.log(True, e)
                 i += 1
                 self.delay(i)
+
+    def subscribe(self, topic, qos=0):
+        if not hasattr(self, 'subscriptions'):
+            self.subscriptions = []
+        sub = (topic, qos)
+        if sub not in self.subscriptions:
+            self.subscriptions.append(sub)
+        return super().subscribe(topic, qos)
 
     def publish(self, topic, msg, retain=False, qos=0):
         while 1:

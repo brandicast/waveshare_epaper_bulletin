@@ -116,6 +116,8 @@ class BMPDisplay:
         """Load and display raw pixel data file using memory-efficient methods."""
         gc.collect() # Free up memory before allocation
         try:
+            # Check file size to determine if we have a red channel
+            file_size = os.stat(filepath)[6]
             with open(filepath, 'rb') as f:
                 # Read directly into the existing e-paper buffer to avoid double allocation
                 # Use a memoryview for safer and faster access if needed, but readinto works on bytearray
@@ -130,14 +132,18 @@ class BMPDisplay:
                     for i in range(bytes_read, self.expected_size):
                         self.epd.buffer_black[i] = 1 # WHITE
                 
-                # Ensure red buffer is cleared (0) without re-allocating
-                # Using a loop is slower but memory-safe. 
-                # Better: self.epd.imagered.fill(0) if imagered is available
-                if hasattr(self.epd, 'imagered'):
-                    self.epd.imagered.fill(0)
+                # If the file contains a red channel (size >= 96KB)
+                if file_size >= self.expected_size * 2:
+                    print("[Display] Reading red channel...")
+                    red_bytes_read = f.readinto(self.epd.buffer_red)
+                    print("[Display] Read {} bytes into red buffer (expected {})".format(red_bytes_read, self.expected_size))
                 else:
-                    for i in range(len(self.epd.buffer_red)):
-                        self.epd.buffer_red[i] = 0
+                    # Ensure red buffer is cleared (0) without re-allocating
+                    if hasattr(self.epd, 'imagered'):
+                        self.epd.imagered.fill(0)
+                    else:
+                        for i in range(len(self.epd.buffer_red)):
+                            self.epd.buffer_red[i] = 0
                 
                 # Display the buffer
                 print("[Display] Triggering display refresh...")

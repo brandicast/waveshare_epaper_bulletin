@@ -104,8 +104,14 @@ class EPD_7in5_B:
         self._delay_ms(200)
     
     def _wait_until_idle(self):
+        timeout_ms = 40000
+        elapsed_ms = 0
         while self._digital_read(self.busy_pin) == 0:
             self._delay_ms(10)
+            elapsed_ms += 10
+            if elapsed_ms >= timeout_ms:
+                print("  [EPD Warning] _wait_until_idle timed out after 40s!")
+                break
         self._delay_ms(10)
     
     def _turn_on_display(self):
