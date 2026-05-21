@@ -189,38 +189,58 @@ def wifi_connection_phase(wifi_manager, epd=None, timeout_ms=DEFAULT_TIMEOUT_MS,
 
 
 def display_initial_image(display_handler, timeout_ms=DEFAULT_TIMEOUT_MS):
-    """Display initial image (wifi_connected.bmp, latest.bin, etc.)."""
-    print("\n=== Displaying Initial Image ===")
+    """Display the WiFi-connected image after WiFi is established."""
+    print("\n=== Displaying WiFi Connected Image ===")
     
     if not display_handler:
         print("[Main] ERROR: Display handler not available")
         return False
     
-    # Priority list for initial images
-    image_paths = [
-        './resources/wifi_connected.bmp',
-        './resources/home.bmp',
-        RECEIVED_BMP_PATH,
-        RECEIVED_BIN_PATH
-    ]
-    
-    display_path = None
-    for path in image_paths:
-        if file_exists(path):
-            print(f"[Main] Found image: {path}")
-            display_path = path
-            break
-            
-    if not display_path:
-        print(f"[Main] WARNING: No initial image found in {image_paths}")
-        # Try to show a simple message at least
-        display_handler.draw_text("Ready to receive messages...", 100, 240)
+    wifi_image_path = './resources/wifi_connected.bmp'
+    if not file_exists(wifi_image_path):
+        print("[Main] WARNING: wifi_connected.bmp not found; leaving current screen")
         return False
-    
-    # Display with timeout
-    print(f"[Main] Displaying {display_path}...")
+
+    print(f"[Main] Found image: {wifi_image_path}")
+    print(f"[Main] Displaying {wifi_image_path}...")
     start = utime.ticks_ms()
     
+    if display_handler.display_file(wifi_image_path):
+        elapsed = utime.ticks_diff(utime.ticks_ms(), start)
+        print(f"[Main] Image displayed successfully ({elapsed}ms)")
+        return True
+    else:
+        print(f"[Main] ERROR: Failed to display image")
+        return False
+
+
+def display_received_or_home(display_handler):
+    """Display the latest received image or fallback to home.bmp."""
+    print("\n=== Displaying Received or Home Image ===")
+    if not display_handler:
+        print("[Main] ERROR: Display handler not available")
+        return False
+
+    received_candidates = []
+    if file_exists(RECEIVED_BMP_PATH):
+        received_candidates.append(RECEIVED_BMP_PATH)
+    if file_exists(RECEIVED_BIN_PATH):
+        received_candidates.append(RECEIVED_BIN_PATH)
+
+    if received_candidates:
+        display_path = max(received_candidates, key=lambda p: os.stat(p)[8])
+        print(f"[Main] Using latest received image: {display_path}")
+    elif file_exists('./resources/home.bmp'):
+        display_path = './resources/home.bmp'
+        print(f"[Main] No received image found; using home screen: {display_path}")
+    else:
+        print("[Main] WARNING: No home image found")
+        display_handler.draw_text("Ready to receive messages...", 100, 240)
+        return False
+
+    print(f"[Main] Displaying {display_path}...")
+    start = utime.ticks_ms()
+
     if display_handler.display_file(display_path):
         elapsed = utime.ticks_diff(utime.ticks_ms(), start)
         print(f"[Main] Image displayed successfully ({elapsed}ms)")
@@ -463,11 +483,13 @@ def main():
             print(f"[Main] FATAL: Failed to initialize display handler: {e}")
             return 1
         
-        # Phase 5: Display initial image
-        if not display_initial_image(display_handler, timeout_ms=DEFAULT_TIMEOUT_MS):
-            print("[Main] WARNING: Failed to display initial image")
-            # Continue anyway
-        
+        # Phase 5: Display wifi connected image
+        if wifi_ok:
+            if not display_initial_image(display_handler, timeout_ms=DEFAULT_TIMEOUT_MS):
+                print("[Main] WARNING: Failed to display wifi connected image")
+        else:
+            print("[Main] Skipping wifi connected image because WiFi is not connected")
+
         # Phase 6: Initialize MQTT
         mqtt_handler = initialize_mqtt(timeout_ms=DEFAULT_TIMEOUT_MS)
         if not mqtt_handler:
@@ -486,11 +508,10 @@ def main():
         # Phase 7: Main loop
         print("[Main] All systems initialized successfully!")
         
-        # After MQTT success, try to display the home screen specifically
         if mqtt_handler.is_connected:
-            print("[Main] MQTT connected, displaying home screen...")
-            display_handler.display_file('./resources/home.bmp')
-            
+            print("[Main] MQTT connected, displaying latest received image or home screen...")
+            display_received_or_home(display_handler)
+        
         print("[Main] Starting main application loop...")
         
         if main_loop(epd, display_handler, mqtt_handler, timeout_ms=DEFAULT_TIMEOUT_MS, reset_button=reset_button):
