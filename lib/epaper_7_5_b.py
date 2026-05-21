@@ -57,6 +57,8 @@ class EPD_7in5_B:
         self.imagered = framebuf.FrameBuffer(
             self.buffer_red, self.width, self.height, framebuf.MONO_HLSB)
         
+        # buffers left uninitialized here; caller may clear as needed
+        
         # 根據模式選擇初始化
         if mode == "fast":
             self.init_fast()
@@ -155,6 +157,8 @@ class EPD_7in5_B:
         
         self._send_command(0x60)  # TCON
         self._send_data(0x22)
+
+        # no extra automatic clear or robust init here
     
     def init_fast(self):
         """快速初始化 (犧牲少許對比度換取速度)"""

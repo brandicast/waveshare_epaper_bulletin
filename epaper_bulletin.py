@@ -15,11 +15,15 @@ import utime
 import os
 import sys
 import gc
-
 try:
-    from machine import Pin
+    from machine import Pin, reset_cause, DEEPSLEEP_RESET, PWRON_RESET, HARD_RESET, WDT_RESET
 except ImportError:
     Pin = None
+    reset_cause = None
+    DEEPSLEEP_RESET = None
+    PWRON_RESET = None
+    HARD_RESET = None
+    WDT_RESET = None
 
 # Set timeout for operations (avoid hanging)
 DEFAULT_TIMEOUT_MS = 30000
@@ -48,6 +52,25 @@ def log_memory(stage):
         print(f"[Main] {stage} memory: free={free}, alloc={alloc}")
     except AttributeError:
         print(f"[Main] {stage} memory: gc.mem_free unavailable")
+
+
+def get_reset_cause_name():
+    """Return a human-friendly reset cause name if available."""
+    if reset_cause is None:
+        return "unknown"
+    try:
+        cause = reset_cause()
+        if cause == PWRON_RESET:
+            return "PWRON_RESET"
+        if cause == HARD_RESET:
+            return "HARD_RESET"
+        if cause == DEEPSLEEP_RESET:
+            return "DEEPSLEEP_RESET"
+        if cause == WDT_RESET:
+            return "WDT_RESET"
+        return str(cause)
+    except Exception:
+        return "unknown"
 
 
 def clear_user_config_directory():
@@ -457,6 +480,8 @@ def main_loop(epd, display_handler, mqtt_handler, timeout_ms=DEFAULT_TIMEOUT_MS,
 
 def main():
     """Main application entry point."""
+    print("[Boot] main() entered")
+    print(f"[Boot] reset cause: {get_reset_cause_name()}")
     print("\n" + "="*60)
     print("  E-Paper Bulletin Board - Raspberry Pi Pico W")
     print("="*60)
@@ -468,20 +493,42 @@ def main():
         print("="*40)
         
         # Initialize display hardware immediately
-        from lib.epaper_7_5_b import EPD_7in5_B
-        epd = EPD_7in5_B()
-        epd.init() # Ensure it's ready
+        try:
+            from lib.epaper_7_5_b import EPD_7in5_B
+            epd = EPD_7in5_B()
+            epd.init() # Ensure it's ready
+            print("[Main] Display initialized successfully")
+        except Exception as e:
+            print(f"[Main] FATAL: Display initialization failed: {e}")
+            import sys
+            if hasattr(sys, 'print_exception'):
+                sys.print_exception(e)
+            return 1
         
-        from core.bmp_display import BMPDisplay
-        display_handler = BMPDisplay(epd, timeout_ms=DEFAULT_TIMEOUT_MS)
+        try:
+            from core.bmp_display import BMPDisplay
+            display_handler = BMPDisplay(epd, timeout_ms=DEFAULT_TIMEOUT_MS)
+            log_memory("After BMPDisplay creation")
+        except Exception as e:
+            print(f"[Main] FATAL: BMPDisplay creation failed: {e}")
+            import sys
+            if hasattr(sys, 'print_exception'):
+                sys.print_exception(e)
+            return 1
         
         # Show Welcome Screen before anything else
-        if file_exists('./resources/welcome.bmp'):
-            print("[Main] Displaying welcome screen...")
-            display_handler.display_file('./resources/welcome.bmp')
-        else:
-            print("[Main] Welcome screen not found, drawing text...")
-            display_handler.draw_text("BreadSoft Bulletin\nStarting system...", 100, 200)
+        try:
+            if file_exists('./resources/welcome.bmp'):
+                print("[Main] Displaying welcome screen...")
+                display_handler.display_file('./resources/welcome.bmp')
+            else:
+                print("[Main] Welcome screen not found, drawing text...")
+                display_handler.draw_text("BreadSoft Bulletin\nStarting system...", 50, 200)
+        except Exception as e:
+            print(f"[Main] WARNING: Failed to display welcome screen: {e}")
+            import sys
+            if hasattr(sys, 'print_exception'):
+                sys.print_exception(e)
 
         # Phase 1: Initialize WiFi
         wifi_manager = initialize_wifi(timeout_ms=DEFAULT_TIMEOUT_MS)
@@ -549,6 +596,12 @@ def main():
         import sys
         if hasattr(sys, 'print_exception'):
             sys.print_exception(e)
+        # Try to display error on screen if possible
+        try:
+            if 'display_handler' in locals() and display_handler:
+                display_handler.draw_error(f"System Error\n{str(e)[:40]}")
+        except:
+            pass
         return 1
 
 
