@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import sys
 import os
 from PIL import Image, ImageDraw, ImageFont
 
@@ -40,7 +39,7 @@ def generate_bmp(text, output_path="resources/welcome.bmp", width=800, height=48
         return ImageFont.load_default(), 20
 
     # Draw main text in black
-    main_font, main_size = get_fitting_font(text, width * 0.9, height * 0.4 if red_text else height * 0.8)
+    main_font, _ = get_fitting_font(text, width * 0.9, height * 0.4 if red_text else height * 0.8)
     l, t, r, b = draw.textbbox((0, 0), text, font=main_font)
     x = (width - (r - l)) // 2
     y = (height // 2 - (b - t)) // 2 if red_text else (height - (b - t)) // 2
@@ -48,7 +47,7 @@ def generate_bmp(text, output_path="resources/welcome.bmp", width=800, height=48
 
     # Draw red text if provided
     if red_text:
-        red_font, red_size = get_fitting_font(red_text, width * 0.9, height * 0.4)
+        red_font, _ = get_fitting_font(red_text, width * 0.9, height * 0.4)
         rl, rt, rr, rb = draw.textbbox((0, 0), red_text, font=red_font)
         rx = (width - (rr - rl)) // 2
         ry = height // 2 + (height // 2 - (rb - rt)) // 2
@@ -58,7 +57,7 @@ def generate_bmp(text, output_path="resources/welcome.bmp", width=800, height=48
     try:
         brand_f = ImageFont.truetype(font_path, 20) if font_path else ImageFont.load_default()
         bt = "Designed by BreadSoft"
-        bl, bt_, br, bb = draw.textbbox((0, 0), bt, font=brand_f)
+        bl, _, br, _ = draw.textbbox((0, 0), bt, font=brand_f)
         draw.text(((width - (br - bl)) // 2, height - 30), bt, font=brand_f, fill=(150, 150, 150))
     except:
         pass
