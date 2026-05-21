@@ -2,3 +2,10 @@ resources/received.bmp
 resources/latest.bin
 temp_mqtt_msg.bin
 wifi_config/
+test/
+.gitignore
+lib/__pycache__
+core/__pycache__
+*.log
+__pycache__
+.venv
