@@ -14,6 +14,7 @@ Flow:
 import utime
 import os
 import sys
+import gc
 
 try:
     from machine import Pin
@@ -37,6 +38,16 @@ def file_exists(path):
         return True
     except OSError:
         return False
+
+
+def log_memory(stage):
+    """Log current GC memory state if available."""
+    try:
+        free = gc.mem_free()
+        alloc = gc.mem_alloc()
+        print(f"[Main] {stage} memory: free={free}, alloc={alloc}")
+    except AttributeError:
+        print(f"[Main] {stage} memory: gc.mem_free unavailable")
 
 
 def clear_user_config_directory():
@@ -144,30 +155,31 @@ def wifi_connection_phase(wifi_manager, epd=None, timeout_ms=DEFAULT_TIMEOUT_MS,
         print("[Main] ERROR: WiFi manager not available")
         return False
 
-    forced_provision = False
     if reset_button and is_middle_key_long_pressed(reset_button):
-        print("[Main] Middle key long press detected; forcing AP provisioning")
+        print("[Main] Middle key long press detected; clearing user_config and rebooting...")
         clear_user_config_directory()
-        forced_provision = True
+        try:
+            import machine
+            machine.reset()
+        except Exception as e:
+            print(f"[Main] WARNING: Failed to reboot after clearing user_config: {e}")
+        return False
+
+    # Try to connect with saved configuration
+    print("[Main] Attempting to connect with saved WiFi config...")
+    start = utime.ticks_ms()
     
-    if not forced_provision:
-        # Try to connect with saved configuration
-        print("[Main] Attempting to connect with saved WiFi config...")
-        start = utime.ticks_ms()
-        
-        if wifi_manager.try_connect_to_saved_config():
-            elapsed = utime.ticks_diff(utime.ticks_ms(), start)
-            print(f"[Main] WiFi connected successfully ({elapsed}ms)")
-            ip_info = wifi_manager.get_ip_info()
-            if ip_info:
-                print(f"[Main] IP: {ip_info[0]}")
-            return True
-        
-        print("[Main] Saved WiFi config failed.")
-    else:
-        print("[Main] Skipping saved WiFi config due to middle key long press")
+    if wifi_manager.try_connect_to_saved_config():
+        elapsed = utime.ticks_diff(utime.ticks_ms(), start)
+        print(f"[Main] WiFi connected successfully ({elapsed}ms)")
+        ip_info = wifi_manager.get_ip_info()
+        if ip_info:
+            print(f"[Main] IP: {ip_info[0]}")
+        return True
     
-    # Saved config failed or forced provisioning, start provisioning
+    print("[Main] Saved WiFi config failed.")
+    
+    # Saved config failed, start provisioning
     print("[Main] Starting WiFi provisioning...")
     print("[Main] Please follow instructions on the e-paper display...")
     
@@ -254,8 +266,9 @@ def initialize_mqtt(timeout_ms=DEFAULT_TIMEOUT_MS):
     """Initialize MQTT handler."""
     print("\n=== Initializing MQTT ===")
     
-    import gc
+    log_memory("Before MQTT init")
     gc.collect()
+    log_memory("After GC before MQTT init")
     
     try:
         from core.mqtt_handler import MQTTHandler
@@ -309,7 +322,9 @@ def main_loop(epd, display_handler, mqtt_handler, timeout_ms=DEFAULT_TIMEOUT_MS,
     error_count = 0
     max_consecutive_errors = 5
     check_interval_ms = 1000  # Check messages every 1 second
+    reconnect_interval_ms = 5000  # Try reconnect every 5 seconds when disconnected
     last_check = utime.ticks_ms()
+    last_reconnect_attempt = utime.ticks_ms()
     
     print("[Main] Entering main loop (checking for MQTT messages)")
     if not mqtt_handler.is_connected:
@@ -368,7 +383,6 @@ def main_loop(epd, display_handler, mqtt_handler, timeout_ms=DEFAULT_TIMEOUT_MS,
                                 error_count += 1
                         
                         elapsed = utime.ticks_diff(utime.ticks_ms(), start)
-                        loop_count += 1
                         
                         # Print status every 60 checks (~60 seconds)
                         if loop_count % 60 == 0:
@@ -379,14 +393,22 @@ def main_loop(epd, display_handler, mqtt_handler, timeout_ms=DEFAULT_TIMEOUT_MS,
                                 loop_count = 0
                                 
                     elif not mqtt_handler.is_connected:
-                        # If not connected, just count it as a "waiting" state or minor error
+                        if utime.ticks_diff(current_time, last_reconnect_attempt) >= reconnect_interval_ms:
+                            print("[Main] MQTT disconnected, attempting reconnect...")
+                            if mqtt_handler.connect():
+                                print("[Main] MQTT reconnected")
+                                error_count = 0
+                            else:
+                                print("[Main] MQTT reconnect failed")
+                            last_reconnect_attempt = current_time
+
                         if loop_count % 60 == 0:
                             print(f"[Main] Status: MQTT disconnected, Loop #{loop_count}")
-                        error_count += 1
                     else:
                         print("[Main] ERROR: MQTT check failed")
                         error_count += 1
-                    
+
+                    loop_count += 1
                     last_check = current_time
                     
                     # Check if too many errors
@@ -394,11 +416,14 @@ def main_loop(epd, display_handler, mqtt_handler, timeout_ms=DEFAULT_TIMEOUT_MS,
                         print(f"[Main] ERROR: Too many consecutive errors ({error_count})")
                         print("[Main] Attempting to reconnect MQTT...")
                         
+                        log_memory("Before reconnect attempt")
                         if mqtt_handler.connect():
                             print("[Main] MQTT reconnected")
+                            log_memory("After reconnect success")
                             error_count = 0
                         else:
                             print("[Main] MQTT reconnection failed")
+                            log_memory("After reconnect failure")
                             # Continue anyway, might recover
                             error_count = max_consecutive_errors - 1
                 

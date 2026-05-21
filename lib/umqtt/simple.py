@@ -209,7 +209,23 @@ class MQTTClient:
             raise OSError(-1) # Connection corrupted
         if sz > 102400: # Allow up to 100KB for 3-color raw binary files (96,000 bytes)
             print("[umqtt] ERROR: Message too large: {}".format(sz))
-            raise OSError(-1)
+            # Drain the oversized payload so the connection remains in sync.
+            remaining = sz
+            while remaining > 0:
+                chunk = self.sock.read(min(remaining, 1024))
+                if not chunk:
+                    print("[umqtt] ERROR: Failed to discard oversized payload")
+                    raise OSError(-1)
+                remaining -= len(chunk)
+
+            if op & 6 == 2:
+                pkt = bytearray(b"\x40\x02\0\0")
+                struct.pack_into("!H", pkt, 2, pid)
+                self.sock.write(pkt)
+            elif op & 6 == 4:
+                assert 0
+
+            return op
             
         # Read message in chunks to avoid memory issues with large payloads
         temp_file = 'temp_mqtt_msg.bin'

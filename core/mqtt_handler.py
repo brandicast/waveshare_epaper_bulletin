@@ -30,6 +30,13 @@ def _ensure_umqtt_package():
     return lib_dir
 
 
+def _format_memory():
+    try:
+        return "free={}, alloc={}".format(gc.mem_free(), gc.mem_alloc())
+    except AttributeError:
+        return "gc.mem_free unavailable"
+
+
 class MQTTHandler:
     def __init__(self, client_id="pico_epaper", timeout_ms=5000):
         """
@@ -109,6 +116,7 @@ class MQTTHandler:
             topic_prefix = self.config['mqtt_topic']
             
             print("[MQTT] Connecting to {}:{}".format(server, port))
+            print("[MQTT] {}".format(_format_memory()))
             
             self.client = MQTTClient(self.client_id, server, port)
             self.client.set_callback(self._on_message)
@@ -116,8 +124,10 @@ class MQTTHandler:
             start_time = utime.ticks_ms()
             while utime.ticks_diff(utime.ticks_ms(), start_time) < self.timeout_ms:
                 try:
+                    print("[MQTT] Attempting broker connect; {}".format(_format_memory()))
                     self.client.connect(clean_session=True)
                     print("[MQTT] Connected to broker")
+                    print("[MQTT] After connect; {}".format(_format_memory()))
                     
                     # Subscribe to two topics
                     topic_bmp = "{}/bmp".format(topic_prefix)
@@ -126,11 +136,13 @@ class MQTTHandler:
                     self.client.subscribe(topic_bmp)
                     self.client.subscribe(topic_bin)
                     print("[MQTT] Subscribed to: {} and {}".format(topic_bmp, topic_bin))
+                    print("[MQTT] After subscribe; {}".format(_format_memory()))
                     
                     self.is_connected = True
                     return True
                 except Exception as e:
                     print("[MQTT] Connection attempt failed: {}".format(e))
+                    print("[MQTT] Connection attempt memory: {}".format(_format_memory()))
                     utime.sleep_ms(500)
             
             print("[MQTT] Connection timeout")
@@ -150,12 +162,25 @@ class MQTTHandler:
         except Exception as e:
             print("[MQTT] Fatal error: {}".format(e))
             return False
+
+    def _recover_connection(self):
+        """Recover from MQTT errors by disconnecting and reconnecting."""
+        self.is_connected = False
+        if self.client:
+            try:
+                self.client.disconnect()
+            except Exception:
+                pass
+            self.client = None
+        gc.collect()
+        return self.connect()
     
     def _on_message(self, topic, msg_file):
         """Callback function for received messages (file-based)."""
         try:
             topic_str = topic.decode() if isinstance(topic, bytes) else topic
             print("[MQTT] Message received on: {}".format(topic_str))
+            print("[MQTT] Message callback memory: {}".format(_format_memory()))
             
             # Ensure resources directory exists
             if not self._file_exists(USER_CONFIG_DIR):
@@ -178,9 +203,11 @@ class MQTTHandler:
                     os.remove(dest)
                 os.rename(msg_file, dest)
                 print("[MQTT] Saved to {}".format(dest))
+                print("[MQTT] After save memory: {}".format(_format_memory()))
                 self.last_message = True
             except Exception as e:
                 print("[MQTT] Error saving message to {}: {}".format(dest, e))
+                print("[MQTT] Error save memory: {}".format(_format_memory()))
                 return
         
         except Exception as e:
@@ -190,15 +217,24 @@ class MQTTHandler:
         """Check for incoming MQTT messages (non-blocking)."""
         try:
             if self.client and self.is_connected:
+                print("[MQTT] Before check_msg; {}".format(_format_memory()))
                 self.client.check_msg()
+                print("[MQTT] After check_msg; {}".format(_format_memory()))
                 return True
             return False
         except OSError as e:
-            print("[MQTT] Connection lost: {}".format(e))
+            print("[MQTT] Connection error during message check: {}".format(e))
+            print("[MQTT] check_messages memory: {}".format(_format_memory()))
             self.is_connected = False
+            if self._recover_connection():
+                print("[MQTT] Reconnected after message check error")
+                return True
             return False
         except Exception as e:
             print("[MQTT] Error checking messages: {}".format(e))
+            print("[MQTT] check_messages exception memory: {}".format(_format_memory()))
+            self.is_connected = False
+            self._recover_connection()
             return False
     
     def disconnect(self):
