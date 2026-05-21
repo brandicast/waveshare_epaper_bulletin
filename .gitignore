@@ -1,7 +1,6 @@
-resources/received.bmp
+user_config/
 resources/latest.bin
 temp_mqtt_msg.bin
-wifi_config/
 test/
 .gitignore
 lib/__pycache__
