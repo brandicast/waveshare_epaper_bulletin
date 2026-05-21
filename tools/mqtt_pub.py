@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import sys
 import os
-import time
 import paho.mqtt.client as mqtt
 
 def publish_image(file_path, topic_prefix, server, port=1883):
