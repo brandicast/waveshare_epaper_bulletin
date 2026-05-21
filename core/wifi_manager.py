@@ -9,7 +9,8 @@ import os
 import utime
 
 MAX_WIFI_RETRIES = 3
-WIFI_CONFIG_PATH = './wifi_config/wifi_config.json'
+USER_CONFIG_DIR = './user_config'
+WIFI_CONFIG_PATH = USER_CONFIG_DIR + '/wifi_config.json'
 
 class WiFiManager:
     def __init__(self, timeout_ms=30000):
@@ -46,9 +47,9 @@ class WiFiManager:
     def save_config(self, ssid, password):
         """Save WiFi configuration to file."""
         try:
-            # Ensure wifi_config directory exists
-            if not self._file_exists('./wifi_config'):
-                os.mkdir('./wifi_config')
+            # Ensure user_config directory exists
+            if not self._file_exists(USER_CONFIG_DIR):
+                os.mkdir(USER_CONFIG_DIR)
             
             config = {'ssid': ssid, 'password': password}
             with open(WIFI_CONFIG_PATH, 'w') as f:

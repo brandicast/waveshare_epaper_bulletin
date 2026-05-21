@@ -7,6 +7,8 @@ import socket
 import os
 
 VERSION = "1.8 - 20260514_235500"
+USER_CONFIG_DIR = './user_config'
+USER_WIFI_CONFIG_FILE = USER_CONFIG_DIR + '/wifi_config.json'
 
 # Initialize ePaper only when needed
 epd = None
@@ -99,14 +101,15 @@ def connect_to_wifi(ssid, password, existing_epd=None):
     utime.sleep(3)
     return False
 
+
 def provision_wifi(existing_epd=None):
     """Main provisioning entry point"""
     print(f"Pico WiFi Provisioning {VERSION}")
     
     # Check for WiFi config
     try:
-        if os.stat('wifi_config/wifi_config.json'):
-            with open('wifi_config/wifi_config.json', 'r') as f:
+        if os.stat(USER_WIFI_CONFIG_FILE):
+            with open(USER_WIFI_CONFIG_FILE, 'r') as f:
                 config = json.load(f)
             ssid = config['ssid']
             password = config['password']
@@ -157,8 +160,8 @@ def provision_wifi(existing_epd=None):
                     f"URL: http://{ap_ip}"
                 ], y_start=100, existing_epd=existing_epd)
             
-            # Reset button setup
-            reset_button = Pin(14, Pin.IN, Pin.PULL_UP)
+            # Reset button setup (Middle Key)
+            reset_button = Pin(2, Pin.IN, Pin.PULL_UP)
             reset_press_start = None
             
             # Inner loop for provisioning server
@@ -216,11 +219,15 @@ def provision_wifi(existing_epd=None):
                             config = {'ssid': ssid, 'password': password}
                             
                             try:
-                                os.mkdir('/wifi_config')
-                            except:
-                                pass
+                                if not os.stat(USER_CONFIG_DIR):
+                                    os.mkdir(USER_CONFIG_DIR)
+                            except Exception:
+                                try:
+                                    os.mkdir(USER_CONFIG_DIR)
+                                except Exception:
+                                    pass
                             
-                            with open('/wifi_config/wifi_config.json', 'w') as f:
+                            with open(USER_WIFI_CONFIG_FILE, 'w') as f:
                                 json.dump(config, f)
                             
                             # Reply to client
@@ -275,9 +282,20 @@ def provision_wifi(existing_epd=None):
                         reset_press_start = utime.time()
                     elif utime.time() - reset_press_start >= 5:
                         try:
-                            os.remove('wifi_config/wifi_config.json')
-                            print('WiFi config cleared')
-                        except:
+                            if os.stat(USER_CONFIG_DIR):
+                                for entry in os.listdir(USER_CONFIG_DIR):
+                                    path = USER_CONFIG_DIR + '/' + entry
+                                    try:
+                                        os.remove(path)
+                                    except OSError:
+                                        try:
+                                            for sub in os.listdir(path):
+                                                os.remove(path + '/' + sub)
+                                            os.rmdir(path)
+                                        except Exception:
+                                            pass
+                                os.rmdir(USER_CONFIG_DIR)
+                        except Exception:
                             pass
                         display_text(["Config Cleared", "Rebooting..."], y_start=180, existing_epd=existing_epd)
                         utime.sleep(2)

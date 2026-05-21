@@ -89,8 +89,26 @@ mqtt_port=1883
 mqtt_topic=epaper/bulletin
 ```
 
+### MQTT 測試
+MQTT 主題前綴由 `mqtt_topic` 定義。系統會訂閱：
+- `<mqtt_topic>/bmp`：接收 BMP 圖片
+- `<mqtt_topic>/binary`：接收二進位圖像
+
+可使用 `tools/mqtt_pub.py` 測試：
+```bash
+python3 tools/mqtt_pub.py tools/test_3color.bmp 192.168.0.96 epaper/bulletin
+python3 tools/mqtt_pub.py ./path/to/image.bin 192.168.0.96 epaper/bulletin
+```
+
 ### WiFi 配置
-首次啟動或長按 GPIO 14 (5秒) 會進入 AP 模式（SSID: `Pico-Setup`）。連線後訪問 `192.168.4.1` 即可進行配網。
+首次啟動或 WiFi 設定失敗時會自動進入 AP 模式（SSID: `Pico-Setup`）。連線後訪問 `192.168.4.1` 即可進行配網。
+WiFi 憑證與收到的 MQTT 圖片檔案都會保存在 `./user_config/` 目錄中。
+在系統運行中，長按 Middle Key（GPIO 2）5 秒可清除 `./user_config/`，讓系統回到乾淨狀態並進入 AP 模式。
+
+### 硬體按鍵
+- Top Key: GPIO 3
+- Middle Key: GPIO 2
+- Bottom Key: RUN（硬體重置鍵，無法透過軟體定義）
 
 ## 📝 注意事項
 

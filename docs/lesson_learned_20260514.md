@@ -72,6 +72,12 @@
 - **教訓**：在 MicroPython 專案中，**本地套件路徑必須明確載入並且需要 `__init__.py` 作為套件初始化檔案**。特別要避免依賴工作目錄或預設模組搜尋路徑的隱性行為，因為不同啟動方式（例如 REPL、腳本直接執行、從不同目錄開啟）會改變模組解析結果。
 - **修正**：新增 `lib/umqtt/__init__.py`，並在 `core/mqtt_handler.py` 中加入 `_ensure_umqtt_package()`，將本地 `./lib` 插入 `sys.path`，同時保留 `umqtt.robust` / `umqtt.simple` 的自動 fallback。
 
+## 13. 使用者設定資料集中化管理
+- **錯誤案例**：WiFi 設定與 MQTT 接收檔案分散在 `./wifi_config/` 及 `./resources/`，導致系統無法正確以單一事件（例如 Middle Key 長按）清除所有使用者狀態。
+- **後果**：清除 WiFi 設定後仍會留存舊的 `received.bmp`/`received.bin`，使系統重新啟動時仍然保留舊畫面，並造成狀態不一致。
+- **教訓**：所有可由使用者變更的狀態檔案應集中儲存在同一個目錄，方便重設、備份與清理。
+- **修正**：將 WiFi 憑證與 MQTT 接收檔案統一移到 `./user_config/`，並使 Middle Key 長按 5 秒清除整個 `./user_config/` 目錄，讓裝置回到乾淨初始狀態。
+
 ---
 **紀錄人**: Antigravity AI
 **日期**: 2026-05-21 (Updated)

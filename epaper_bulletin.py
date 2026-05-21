@@ -6,7 +6,7 @@ Flow:
 1. Initialize e-paper display
 2. Try to connect to WiFi (using saved config, max 3 retries)
 3. If WiFi fails, start provisioning
-4. Display initial image (latest.bin or home.bin)
+4. Display initial image (`received.bmp`, `received.bin`, or `home.bmp`)
 5. Connect to MQTT and listen for updates
 6. Enter main loop: check MQTT, display updates, sleep
 """
@@ -15,8 +15,20 @@ import utime
 import os
 import sys
 
+try:
+    from machine import Pin
+except ImportError:
+    Pin = None
+
 # Set timeout for operations (avoid hanging)
 DEFAULT_TIMEOUT_MS = 30000
+
+USER_CONFIG_DIR = './user_config'
+USER_WIFI_CONFIG = USER_CONFIG_DIR + '/wifi_config.json'
+RECEIVED_BMP_PATH = USER_CONFIG_DIR + '/received.bmp'
+RECEIVED_BIN_PATH = USER_CONFIG_DIR + '/received.bin'
+MIDDLE_KEY_PIN = 2
+MIDDLE_KEY_LONG_PRESS_MS = 5000
 
 def file_exists(path):
     """Helper to check if file or directory exists in MicroPython."""
@@ -25,6 +37,61 @@ def file_exists(path):
         return True
     except OSError:
         return False
+
+
+def clear_user_config_directory():
+    """Remove the entire user_config directory and its contents."""
+    try:
+        if file_exists(USER_CONFIG_DIR):
+            for entry in os.listdir(USER_CONFIG_DIR):
+                path = USER_CONFIG_DIR + '/' + entry
+                try:
+                    os.remove(path)
+                except OSError:
+                    try:
+                        # Fallback for subdirectories
+                        for sub in os.listdir(path):
+                            os.remove(path + '/' + sub)
+                        os.rmdir(path)
+                    except Exception:
+                        pass
+            try:
+                os.rmdir(USER_CONFIG_DIR)
+            except OSError:
+                pass
+            print("[Main] Cleared user_config directory")
+            return True
+    except Exception as e:
+        print(f"[Main] WARNING: Failed to clear user_config directory: {e}")
+    return False
+
+
+def initialize_middle_key_button():
+    """Initialize the middle key pin for long-press detection."""
+    if Pin is None:
+        return None
+    try:
+        return Pin(MIDDLE_KEY_PIN, Pin.IN, Pin.PULL_UP)
+    except Exception as e:
+        print(f"[Main] WARNING: Could not initialize middle key pin: {e}")
+        return None
+
+
+def is_middle_key_long_pressed(reset_button, hold_ms=MIDDLE_KEY_LONG_PRESS_MS):
+    """Detect a long press of the middle key (active-low)."""
+    if not reset_button:
+        return False
+    if reset_button.value() != 0:
+        return False
+
+    print("[Main] Middle key press detected, waiting for long press...")
+    start = utime.ticks_ms()
+    while reset_button.value() == 0:
+        if utime.ticks_diff(utime.ticks_ms(), start) >= hold_ms:
+            print("[Main] Middle key long press confirmed")
+            return True
+        utime.sleep_ms(50)
+    return False
 
 def initialize_display():
     """Initialize e-paper display with timeout."""
@@ -69,28 +136,39 @@ def initialize_wifi(timeout_ms=DEFAULT_TIMEOUT_MS):
         return None
 
 
-def wifi_connection_phase(wifi_manager, epd=None, timeout_ms=DEFAULT_TIMEOUT_MS):
+def wifi_connection_phase(wifi_manager, epd=None, timeout_ms=DEFAULT_TIMEOUT_MS, reset_button=None):
     """Handle WiFi connection with saved config or provisioning."""
     print("\n=== WiFi Connection Phase ===")
     
     if not wifi_manager:
         print("[Main] ERROR: WiFi manager not available")
         return False
+
+    forced_provision = False
+    if reset_button and is_middle_key_long_pressed(reset_button):
+        print("[Main] Middle key long press detected; forcing AP provisioning")
+        clear_user_config_directory()
+        forced_provision = True
     
-    # Try to connect with saved configuration
-    print("[Main] Attempting to connect with saved WiFi config...")
-    start = utime.ticks_ms()
+    if not forced_provision:
+        # Try to connect with saved configuration
+        print("[Main] Attempting to connect with saved WiFi config...")
+        start = utime.ticks_ms()
+        
+        if wifi_manager.try_connect_to_saved_config():
+            elapsed = utime.ticks_diff(utime.ticks_ms(), start)
+            print(f"[Main] WiFi connected successfully ({elapsed}ms)")
+            ip_info = wifi_manager.get_ip_info()
+            if ip_info:
+                print(f"[Main] IP: {ip_info[0]}")
+            return True
+        
+        print("[Main] Saved WiFi config failed.")
+    else:
+        print("[Main] Skipping saved WiFi config due to middle key long press")
     
-    if wifi_manager.try_connect_to_saved_config():
-        elapsed = utime.ticks_diff(utime.ticks_ms(), start)
-        print(f"[Main] WiFi connected successfully ({elapsed}ms)")
-        ip_info = wifi_manager.get_ip_info()
-        if ip_info:
-            print(f"[Main] IP: {ip_info[0]}")
-        return True
-    
-    # Saved config failed, start provisioning
-    print("[Main] Saved WiFi config failed. Starting WiFi provisioning...")
+    # Saved config failed or forced provisioning, start provisioning
+    print("[Main] Starting WiFi provisioning...")
     print("[Main] Please follow instructions on the e-paper display...")
     
     try:
@@ -122,8 +200,8 @@ def display_initial_image(display_handler, timeout_ms=DEFAULT_TIMEOUT_MS):
     image_paths = [
         './resources/wifi_connected.bmp',
         './resources/home.bmp',
-        './resources/received.bmp',
-        './resources/latest.bin'
+        RECEIVED_BMP_PATH,
+        RECEIVED_BIN_PATH
     ]
     
     display_path = None
@@ -196,7 +274,7 @@ def initialize_mqtt(timeout_ms=DEFAULT_TIMEOUT_MS):
         return None
 
 
-def main_loop(epd, display_handler, mqtt_handler, timeout_ms=DEFAULT_TIMEOUT_MS):
+def main_loop(epd, display_handler, mqtt_handler, timeout_ms=DEFAULT_TIMEOUT_MS, reset_button=None):
     """
     Main application loop.
     Continuously checks for MQTT messages and updates display.
@@ -222,6 +300,16 @@ def main_loop(epd, display_handler, mqtt_handler, timeout_ms=DEFAULT_TIMEOUT_MS)
         while True:
             try:
                 current_time = utime.ticks_ms()
+
+                if reset_button and is_middle_key_long_pressed(reset_button):
+                    print("[Main] Middle key long press detected during runtime; clearing user_config and rebooting...")
+                    clear_user_config_directory()
+                    try:
+                        import machine
+                        machine.reset()
+                    except Exception as e:
+                        print(f"[Main] WARNING: Failed to reboot: {e}")
+                    return False
                 
                 # Check for MQTT messages at regular intervals with timeout
                 if utime.ticks_diff(current_time, last_check) >= check_interval_ms:
@@ -236,9 +324,9 @@ def main_loop(epd, display_handler, mqtt_handler, timeout_ms=DEFAULT_TIMEOUT_MS)
                             try:
                                 # Determine which file to display
                                 if mqtt_handler.last_message_type == 'bmp':
-                                    update_file = './resources/received.bmp'
+                                    update_file = RECEIVED_BMP_PATH
                                 else:
-                                    update_file = './resources/latest.bin'
+                                    update_file = RECEIVED_BIN_PATH
                                 
                                 # Wake display from sleep (handled inside display_file now, but good to be safe)
                                 display_handler.wake_display()
@@ -357,7 +445,8 @@ def main():
             return 1
         
         # Phase 3: Connect to WiFi
-        wifi_ok = wifi_connection_phase(wifi_manager, epd=epd, timeout_ms=DEFAULT_TIMEOUT_MS)
+        reset_button = initialize_middle_key_button()
+        wifi_ok = wifi_connection_phase(wifi_manager, epd=epd, timeout_ms=DEFAULT_TIMEOUT_MS, reset_button=reset_button)
         
         if not wifi_ok:
             print("[Main] WARNING: WiFi connection failed, but continuing anyway")
@@ -404,7 +493,7 @@ def main():
             
         print("[Main] Starting main application loop...")
         
-        if main_loop(epd, display_handler, mqtt_handler, timeout_ms=DEFAULT_TIMEOUT_MS):
+        if main_loop(epd, display_handler, mqtt_handler, timeout_ms=DEFAULT_TIMEOUT_MS, reset_button=reset_button):
             return 0
         else:
             return 1

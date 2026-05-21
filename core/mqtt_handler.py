@@ -11,7 +11,9 @@ import gc
 
 MAX_BINARY_SIZE = 48000  # Exactly 48000 bytes for 800x480 monochrome display (48000 / 8)
 MQTT_CONFIG_PATH = './conf/mqtt.conf'
-LATEST_PIXEL_PATH = './resources/latest.bin'
+USER_CONFIG_DIR = './user_config'
+RECEIVED_BMP_PATH = USER_CONFIG_DIR + '/received.bmp'
+RECEIVED_BIN_PATH = USER_CONFIG_DIR + '/received.bin'
 
 
 def _ensure_umqtt_package():
@@ -156,15 +158,15 @@ class MQTTHandler:
             print("[MQTT] Message received on: {}".format(topic_str))
             
             # Ensure resources directory exists
-            if not self._file_exists('./resources'):
-                os.mkdir('./resources')
+            if not self._file_exists(USER_CONFIG_DIR):
+                os.mkdir(USER_CONFIG_DIR)
             
             # Identify topic type
             if topic_str.endswith('/bmp'):
-                dest = './resources/received.bmp'
+                dest = RECEIVED_BMP_PATH
                 self.last_message_type = 'bmp'
             elif topic_str.endswith('/binary'):
-                dest = './resources/latest.bin'
+                dest = RECEIVED_BIN_PATH
                 self.last_message_type = 'binary'
             else:
                 print("[MQTT] Unknown topic suffix: {}".format(topic_str))
