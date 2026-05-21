@@ -344,7 +344,7 @@ def main_loop(epd, display_handler, mqtt_handler, timeout_ms=DEFAULT_TIMEOUT_MS,
     loop_count = 0
     error_count = 0
     max_consecutive_errors = 5
-    check_interval_ms = 1000  # Check messages every 1 second
+    check_interval_ms = 3000  # Check messages every 1 second
     reconnect_interval_ms = 5000  # Try reconnect every 5 seconds when disconnected
     last_check = utime.ticks_ms()
     last_reconnect_attempt = utime.ticks_ms()
@@ -355,9 +355,11 @@ def main_loop(epd, display_handler, mqtt_handler, timeout_ms=DEFAULT_TIMEOUT_MS,
     print("[Main] Press Ctrl+C to exit\n")
     
     try:
+        from gpio import led
         while True:
             try:
                 current_time = utime.ticks_ms()
+                led.toggle()
 
                 if reset_button and is_middle_key_long_pressed(reset_button):
                     print("[Main] Middle key long press detected during runtime; clearing user_config and rebooting...")
@@ -494,9 +496,11 @@ def main():
         
         # Initialize display hardware immediately
         try:
+            utime.sleep(2)  # 等待 2 秒
+
             from lib.epaper_7_5_b import EPD_7in5_B
             epd = EPD_7in5_B()
-            epd.init() # Ensure it's ready
+            #epd.init() # Ensure it's ready
             print("[Main] Display initialized successfully")
         except Exception as e:
             print(f"[Main] FATAL: Display initialization failed: {e}")
