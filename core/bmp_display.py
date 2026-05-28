@@ -63,10 +63,12 @@ class BMPDisplay:
             x_offset = max(0, (800 - width) // 2)
             y_offset = max(0, (480 - height) // 2)
             
-            # Always clear the screen before displaying new content
-            print("[Display] Clearing screen before rendering...")
+            # Reset RAM buffers before rendering (do NOT call epd.clear() — it
+            # triggers a full physical refresh internally, causing a double-refresh).
+            print("[Display] Clearing RAM buffers before rendering...")
             self.wake_display()
-            self.epd.clear("white")
+            self.epd.imageblack.fill(1)  # White background in RAM
+            self.epd.imagered.fill(0)    # No red in RAM
             
             start_time = utime.ticks_ms()
             success = False
@@ -168,10 +170,23 @@ class BMPDisplay:
             return False
     
     def wake_display(self):
-        """Wake up display from sleep mode."""
+        """Wake up display from deep sleep (only if actually sleeping).
+
+        Skips the wake-up sequence when the display is already powered on
+        (e.g. right after __init__).  Calling wake_up() on a non-sleeping
+        display triggers an unnecessary hardware reset that corrupts the
+        controller's SRAM with random data — the primary cause of the
+        red/black/white noise screen on power-on or reset.
+        """
         try:
-            self.epd.wake_up()
-            print("[Display] Display woken up")
+            # Use getattr with True as default so any display object that
+            # does NOT yet have the is_sleeping attribute is treated as
+            # sleeping (safe fallback: wake it up rather than skip).
+            if getattr(self.epd, 'is_sleeping', True):
+                self.epd.wake_up()
+                print("[Display] Display woken up from deep sleep")
+            else:
+                print("[Display] Display already awake — skipping wake_up()")
             return True
         except Exception as e:
             print("[Display] Error waking display: {}".format(e))
@@ -195,7 +210,9 @@ class BMPDisplay:
         """Display a full-screen error message."""
         try:
             self.wake_display()
-            self.epd.clear("white")
+            # Reset RAM buffers only — avoid epd.clear() which triggers a physical refresh
+            self.epd.imageblack.fill(1)  # White background in RAM
+            self.epd.imagered.fill(0)    # No red in RAM
             # Draw a red box at the top
             self.epd.draw_rect(0, 0, 800, 60, 2, fill=True) # 2 = RED
             # Draw white text on red background

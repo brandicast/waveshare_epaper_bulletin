@@ -63,12 +63,16 @@ class MQTTHandler:
     def load_config(self):
         """Load MQTT configuration from file."""
         try:
-            if not self._file_exists(MQTT_CONFIG_PATH):
+            config_path = USER_CONFIG_DIR + '/mqtt.conf'
+            if not self._file_exists(config_path):
+                config_path = MQTT_CONFIG_PATH
+
+            if not self._file_exists(config_path):
                 print("[MQTT] Config file not found")
                 return False
             
             self.config = {}
-            with open(MQTT_CONFIG_PATH, 'r') as f:
+            with open(config_path, 'r') as f:
                 for line in f:
                     line = line.strip()
                     if line and not line.startswith('#'):

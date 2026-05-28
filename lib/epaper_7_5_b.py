@@ -58,6 +58,15 @@ class EPD_7in5_B:
             self.buffer_red, self.width, self.height, framebuf.MONO_HLSB)
         
         # buffers left uninitialized here; caller may clear as needed
+        # Explicitly initialise to a clean white/no-red state so the first
+        # display() call never shows leftover/undefined RAM content.
+        self.imageblack.fill(1)  # 1 = white
+        self.imagered.fill(0)    # 0 = no red
+
+        # Track whether the display is in deep sleep.
+        # Starts False because __init__ calls init() which powers the display on.
+        # Only set True by sleep(), reset to False by wake_up().
+        self.is_sleeping = False
         
         # 根據模式選擇初始化
         if mode == "fast":
@@ -252,12 +261,17 @@ class EPD_7in5_B:
         self._wait_until_idle()
         self._send_command(0x07)  # DEEP SLEEP
         self._send_data(0xA5)
+        self.is_sleeping = True   # Mark display as in deep sleep
     
     def wake_up(self):
         """從深度睡眠喚醒 (必須執行硬體重置與初始化)"""
         print("  [EPD] Waking from deep sleep (Hardware Reset)...")
         self._reset()
         self.init()
+        # Give the DC-DC converter and gate driver time to stabilise before
+        # the caller starts pushing pixel data over SPI.
+        self._delay_ms(200)
+        self.is_sleeping = False  # Mark display as awake
         print("  [EPD] Display initialized and ready")
     
     # ==================== 繪圖輔助函式 ====================
