@@ -174,18 +174,42 @@
             <p>Setup WiFi to start displaying images</p>
             
             <form method="post" action="/submit" id="setupForm">
-                <div class="input-group">
-                    <label>Network SSID</label>
-                    <input type="text" name="ssid" placeholder="Enter WiFi Name" required>
+                <div id="step1">
+                    <div class="input-group">
+                        <label>Network SSID</label>
+                        <input type="text" name="ssid" placeholder="Enter WiFi Name" required>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label>Password</label>
+                        <input type="password" name="password" id="passwordField" placeholder="Enter Password">
+                        <span class="toggle-pass" onclick="togglePass()">SHOW</span>
+                    </div>
+                    
+                    <button type="button" class="btn" onclick="nextStep()">Next: MQTT Setup</button>
                 </div>
                 
-                <div class="input-group">
-                    <label>Password</label>
-                    <input type="password" name="password" id="passwordField" placeholder="Enter Password">
-                    <span class="toggle-pass" onclick="togglePass()">SHOW</span>
+                <div id="step2" style="display: none;">
+                    <div class="input-group">
+                        <label>MQTT Server</label>
+                        <input type="text" name="mqtt_server" value="{{MQTT_SERVER}}" placeholder="192.168.1.100" required>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label>MQTT Port</label>
+                        <input type="number" name="mqtt_port" value="{{MQTT_PORT}}" placeholder="1883" required>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label>MQTT Topic</label>
+                        <input type="text" name="mqtt_topic" value="{{MQTT_TOPIC}}" placeholder="epaper/bulletin" required>
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px;">
+                        <button type="button" class="btn" style="background: #666;" onclick="prevStep()">Back</button>
+                        <button type="submit" class="btn" id="submitBtn">Save & Connect</button>
+                    </div>
                 </div>
-                
-                <button type="submit" class="btn">Connect Device</button>
             </form>
         </div>
 
@@ -214,11 +238,28 @@
             }
         }
 
+        function nextStep() {
+            const ssid = document.querySelector('input[name="ssid"]').value;
+            if (!ssid) {
+                alert("Please enter a WiFi SSID");
+                return;
+            }
+            document.getElementById('step1').style.display = 'none';
+            document.getElementById('step2').style.display = 'block';
+        }
+
+        function prevStep() {
+            document.getElementById('step2').style.display = 'none';
+            document.getElementById('step1').style.display = 'block';
+        }
+
         // Handle form submission
         document.getElementById('setupForm').onsubmit = function() {
-            // No longer forcing success state here, let the server's response handle it
-            document.querySelector('.btn').innerText = 'CONNECTING...';
-            document.querySelector('.btn').disabled = true;
+            var submitBtn = document.getElementById('submitBtn');
+            if (submitBtn) {
+                submitBtn.innerText = 'CONNECTING...';
+            }
+            // Allow form to submit natively without disabling the button immediately
         };
 
         // Check for success param in URL (standard way)

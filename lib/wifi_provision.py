@@ -204,12 +204,18 @@ def provision_wifi(existing_epd=None):
                         # Extract SSID and Password
                         ssid = ""
                         password = ""
+                        mqtt_server = ""
+                        mqtt_port = ""
+                        mqtt_topic = ""
                         params = body.split('&')
                         for p in params:
                             if '=' in p:
                                 key, val = p.split('=', 1)
                                 if key == 'ssid': ssid = val
                                 if key == 'password': password = val
+                                if key == 'mqtt_server': mqtt_server = val
+                                if key == 'mqtt_port': mqtt_port = val
+                                if key == 'mqtt_topic': mqtt_topic = val
 
                         if ssid:
                             ssid = url_decode(ssid)
@@ -230,21 +236,36 @@ def provision_wifi(existing_epd=None):
                             with open(USER_WIFI_CONFIG_FILE, 'w') as f:
                                 json.dump(config, f)
                             
-                            # Reply to client
-                            html = ""
-                            try:
-                                with open('/resources/www/index.html', 'r') as f:
-                                    html = f.read().replace('id="mainContainer"', 'id="mainContainer" class="success"')
-                            except:
-                                html = '<html><body><h1>Success</h1><p>Config received.</p></body></html>'
+                            if mqtt_server and mqtt_port and mqtt_topic:
+                                try:
+                                    with open(USER_CONFIG_DIR + '/mqtt.conf', 'w') as mf:
+                                        mf.write("mqtt_server={}\nmqtt_port={}\nmqtt_topic={}\n".format(
+                                            url_decode(mqtt_server),
+                                            url_decode(mqtt_port),
+                                            url_decode(mqtt_topic)
+                                        ))
+                                except Exception as e:
+                                    print("[Provision] Error saving mqtt config: {}".format(e))
                             
                             # Send headers
                             cl.send('HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n')
                             
-                            # Send body in chunks
-                            chunk_size = 512
-                            for i in range(0, len(html), chunk_size):
-                                cl.send(html[i:i+chunk_size])
+                            # Reply to client
+                            try:
+                                filepath = 'resources/www/index.html'
+                                try:
+                                    os.stat(filepath)
+                                except:
+                                    filepath = '/resources/www/index.html'
+                                    
+                                with open(filepath, 'r') as f:
+                                    for line in f:
+                                        if 'id="mainContainer"' in line:
+                                            line = line.replace('id="mainContainer"', 'id="mainContainer" class="success"')
+                                        cl.send(line)
+                            except Exception as e:
+                                print("[Provision] Error reading index.html for success:", e)
+                                cl.send('<html><body><h1>Success</h1><p>Config received.</p></body></html>')
                             
                             utime.sleep(1)
                             cl.close()
@@ -255,21 +276,38 @@ def provision_wifi(existing_epd=None):
                             cl.send('HTTP/1.1 400 Bad Request\r\n\r\nInvalid data')
                             cl.close()
                     else:
-                        # Serve template
-                        html = ""
+                        mqtt_defaults = {'mqtt_server': '192.168.1.100', 'mqtt_port': '1883', 'mqtt_topic': 'epaper/bulletin'}
                         try:
-                            with open('/resources/www/index.html', 'r') as f:
-                                html = f.read()
-                        except:
-                            html = '<html><body><h1>BreadSoft Setup</h1><form method="post" action="/submit">SSID: <input name="ssid"><br>Pass: <input name="password"><br><input type="submit"></form></body></html>'
-                        
+                            with open('./conf/mqtt.conf', 'r') as mf:
+                                for line in mf:
+                                    if '=' in line and not line.startswith('#'):
+                                        k, v = line.strip().split('=', 1)
+                                        mqtt_defaults[k.strip()] = v.strip()
+                        except Exception:
+                            pass
+                            
                         # Send headers
                         cl.send('HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n')
                         
-                        # Send body in chunks to avoid buffer issues
-                        chunk_size = 512
-                        for i in range(0, len(html), chunk_size):
-                            cl.send(html[i:i+chunk_size])
+                        # Serve template streaming line by line
+                        try:
+                            filepath = 'resources/www/index.html'
+                            try:
+                                os.stat(filepath)
+                            except:
+                                filepath = '/resources/www/index.html'
+                                
+                            with open(filepath, 'r') as f:
+                                for line in f:
+                                    if '{{' in line:
+                                        line = line.replace('{{MQTT_SERVER}}', mqtt_defaults.get('mqtt_server', ''))
+                                        line = line.replace('{{MQTT_PORT}}', mqtt_defaults.get('mqtt_port', ''))
+                                        line = line.replace('{{MQTT_TOPIC}}', mqtt_defaults.get('mqtt_topic', ''))
+                                    cl.send(line)
+                        except Exception as e:
+                            print("[Provision] Error serving template:", e)
+                            fallback = '<html><body><h1>BreadSoft Setup</h1><form method="post" action="/submit">SSID: <input name="ssid"><br>Pass: <input name="password"><br><input type="submit"></form></body></html>'
+                            cl.send(fallback)
                         
                         cl.close()
                 except OSError as e:
