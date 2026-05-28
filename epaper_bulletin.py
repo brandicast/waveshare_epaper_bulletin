@@ -423,6 +423,13 @@ def main_loop(epd, display_handler, mqtt_handler, timeout_ms=DEFAULT_TIMEOUT_MS,
                             if mqtt_handler.connect():
                                 print("[Main] MQTT reconnected")
                                 error_count = 0
+                                # Restore the screen to last received image or home screen
+                                # after recovering from the MQTT error screen
+                                print("[Main] Restoring display after MQTT reconnect...")
+                                try:
+                                    display_received_or_home(display_handler)
+                                except Exception as e:
+                                    print(f"[Main] WARNING: Failed to restore display after reconnect: {e}")
                             else:
                                 print("[Main] MQTT reconnect failed")
                             last_reconnect_attempt = current_time
