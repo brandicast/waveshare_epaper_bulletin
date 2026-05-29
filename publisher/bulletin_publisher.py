@@ -76,6 +76,70 @@ class BulletinPublisher:
             size -= 10
         return self._get_font(20), 20
 
+    def _render_text(self, content, width, height):
+        """Render text with optional <red> tags, wrapping to fit the canvas.
+        Returns a Pillow Image.
+        """
+        # Parse colored segments
+        # group(1) = text before <red>, group(2) = text inside <red>...</red>
+        segments = []
+        import re
+        pattern = re.compile(r"(.*?)<red>(.*?)</red>", re.DOTALL)
+        last_end = 0
+        for m in pattern.finditer(content):
+            # group(1) contains the text before <red> within this match
+            before = m.group(1)
+            if before:
+                segments.append((before, (0, 0, 0)))
+            segments.append((m.group(2), (255, 0, 0)))
+            last_end = m.end()
+        # Any remaining text after the last </red> (or the whole string if no tags)
+        after = content[last_end:]
+        if after:
+            segments.append((after, (0, 0, 0)))
+
+        # Prepare drawing canvas
+        img = Image.new('RGB', (width, height), (255, 255, 255))
+        draw = ImageDraw.Draw(img)
+        max_w = width * 0.9
+        max_h = height * 0.8
+
+        # Determine suitable font size based on full plain text
+        plain_text = ''.join(seg for seg, _ in segments)
+        font, _ = self._get_fitting_font(draw, plain_text, max_w, max_h)
+
+        # Build lines by adding segments until width limit
+        lines = []  # each line is list of (text, color)
+        current_line = []
+        line_width = 0
+        for seg_text, seg_color in segments:
+            seg_w = draw.textbbox((0, 0), seg_text, font=font)[2]
+            if line_width + seg_w <= max_w:
+                current_line.append((seg_text, seg_color))
+                line_width += seg_w
+            else:
+                # start new line
+                lines.append((current_line, line_width))
+                current_line = [(seg_text, seg_color)]
+                line_width = seg_w
+        if current_line:
+            lines.append((current_line, line_width))
+
+        # Compute total height
+        line_height = draw.textbbox((0, 0), 'Ay', font=font)[3]  # approximate line height
+        total_h = len(lines) * line_height + (len(lines) - 1) * 5
+        y = (height - total_h) // 2
+
+        # Render each line
+        for line_items, line_w in lines:
+            x = (width - line_w) // 2
+            cursor_x = x
+            for txt, color in line_items:
+                draw.text((cursor_x, y), txt, font=font, fill=color)
+                cursor_x += draw.textbbox((0, 0), txt, font=font)[2]
+            y += line_height + 5
+        return img
+
     def generate_image(self, content, is_file_path=False):
         width, height = 800, 480
         
@@ -97,21 +161,18 @@ class BulletinPublisher:
             except Exception as e:
                 raise ValueError(f"Failed to load/process image {content}: {e}")
         else:
-            # Text to image
-            img = Image.new('RGB', (width, height), (255, 255, 255))
-            draw = ImageDraw.Draw(img)
-            
-            main_font, _ = self._get_fitting_font(draw, content, width * 0.9, height * 0.8)
-            l, t, r, b = draw.textbbox((0, 0), content, font=main_font)
-            x = (width - (r - l)) // 2
-            y = (height - (b - t)) // 2
-            draw.text((x, y), content, font=main_font, fill=(0, 0, 0))
+            # Text to image with wrapping and color tags
+            img = self._render_text(content, width, height)
             return img
 
-    def _save_bin_and_bmp(self, img, base_filename):
+    def _save_bin_and_bmp(self, img, base_filename, output_dir=None):
         width, height = 800, 480
-        bin_path = os.path.join(self.output_dir, f"{base_filename}.bin")
-        bmp_path = os.path.join(self.output_dir, f"{base_filename}.bmp")
+        # Determine output directory (default to self.output_dir)
+        out_dir = output_dir if output_dir is not None else self.output_dir
+        # Ensure directory exists
+        os.makedirs(out_dir, exist_ok=True)
+        bin_path = os.path.join(out_dir, f"{base_filename}.bin")
+        bmp_path = os.path.join(out_dir, f"{base_filename}.bmp")
         
         # 1. Save quantized BMP for preview
         quantized = img.quantize(colors=16, method=Image.Quantize.MAXCOVERAGE)
@@ -156,12 +217,16 @@ class BulletinPublisher:
                 base_filename = os.path.splitext(os.path.basename(content))[0]
             else:
                 base_filename = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-                
+            
+            # Prepare date-based output directory
+            date_dir = os.path.join(self.output_dir, datetime.now().strftime("%Y_%m_%d"))
+            os.makedirs(date_dir, exist_ok=True)
+            
             # Generate image
             img = self.generate_image(content, is_file_path)
             
-            # Generate .bin and .bmp
-            bin_path, bmp_path = self._save_bin_and_bmp(img, base_filename)
+            # Generate .bin and .bmp using date_dir
+            bin_path, bmp_path = self._save_bin_and_bmp(img, base_filename, date_dir)
             
             # Publish via MQTT
             topic = self.config.get('topic')
